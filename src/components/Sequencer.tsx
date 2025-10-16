@@ -882,36 +882,6 @@ export const Sequencer = () => {
             </div>
           </div>
 
-          {/* Algorithm Diagram */}
-          <div style={{ marginTop: '12px', padding: '12px', background: '#3a3a3a', borderRadius: '4px' }}>
-            <div style={{ fontSize: '12px', color: '#999', marginBottom: '8px', textAlign: 'center' }}>
-              Algorithm: {track.algorithm}
-            </div>
-            <div style={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.4', color: '#e0e0e0' }}>
-              {track.algorithm === 'serial' && (
-                <pre style={{ margin: 0 }}>{`OP1 → OP2 → OP3 → OP4 → Out
- |     |     |     |
- └─────┴─────┴─────┘ (FM modulation)`}</pre>
-              )}
-              {track.algorithm === 'parallel' && (
-                <pre style={{ margin: 0 }}>{`OP1 ┐
-OP2 ├→ Out
-OP3 ┤
-OP4 ┘ (All direct to output)`}</pre>
-              )}
-              {track.algorithm === 'hybrid1' && (
-                <pre style={{ margin: 0 }}>{`OP1 → OP2 ┐
-           ├→ Out
-OP3 → OP4 ┘ (Two FM pairs)`}</pre>
-              )}
-              {track.algorithm === 'hybrid2' && (
-                <pre style={{ margin: 0 }}>{`OP1 → OP2 → OP3 ┐
-                ├→ Out
-OP4 ────────────┘ (3-op chain + 1 direct)`}</pre>
-              )}
-            </div>
-          </div>
-
           {/* Step Sequencer with Pitch Control */}
           <div
             style={{
@@ -1150,27 +1120,6 @@ OP4 ────────────┘ (3-op chain + 1 direct)`}</pre>
                   <div key={opIndex} style={{ background: '#454545', padding: '8px', borderRadius: '4px' }}>
                     <div style={{ fontWeight: '500', marginBottom: '8px', textAlign: 'center', fontSize: '13px' }}>
                       OP{opIndex + 1}
-                      {opIndex === 0 && (
-                        <div style={{ marginTop: '4px', fontSize: '11px' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', justifyContent: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={op.useNoise || false}
-                              onChange={() => {
-                                const newOperators = [...track.operators];
-                                newOperators[0] = { ...newOperators[0], useNoise: !op.useNoise };
-                                setTracks(prev =>
-                                  prev.map(t =>
-                                    t.id === track.id ? { ...t, operators: newOperators } : t
-                                  )
-                                );
-                              }}
-                              style={{ width: '12px', height: '12px' }}
-                            />
-                            Noise
-                          </label>
-                        </div>
-                      )}
                     </div>
                     {[
                       { key: 'ratio', label: 'Ratio', min: 0.1, max: 16 },
@@ -1180,29 +1129,25 @@ OP4 ────────────┘ (3-op chain + 1 direct)`}</pre>
                       { key: 'sustain', label: 'Sustain', min: 0, max: 1 },
                       { key: 'release', label: 'Release', min: 0, max: 1 },
                       { key: 'feedbackAmount', label: 'Feedback', min: 0, max: 1 }
-                    ].map(({ key, label, min, max }) => {
-                      const value = op[key as keyof OperatorParams];
-                      if (typeof value !== 'number') return null;
-                      return (
-                        <div key={key} style={{ marginBottom: '6px' }}>
-                          <div style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                            <span>{label}</span>
-                            <span style={{ color: '#999' }}>{value.toFixed(2)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={min}
-                            max={max}
-                            step={0.01}
-                            value={value}
-                            onChange={e =>
-                              updateOperator(track.id, opIndex, key as keyof OperatorParams, Number(e.target.value))
-                            }
-                            style={{ width: '100%' }}
-                          />
+                    ].map(({ key, label, min, max }) => (
+                      <div key={key} style={{ marginBottom: '6px' }}>
+                        <div style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                          <span>{label}</span>
+                          <span style={{ color: '#999' }}>{op[key as keyof OperatorParams].toFixed(2)}</span>
                         </div>
-                      );
-                    })}
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={0.01}
+                          value={op[key as keyof OperatorParams]}
+                          onChange={e =>
+                            updateOperator(track.id, opIndex, key as keyof OperatorParams, Number(e.target.value))
+                          }
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>

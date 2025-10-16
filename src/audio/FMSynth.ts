@@ -124,40 +124,22 @@ export class FMSynth {
     for (let i = 0; i < 4; i++) {
       const params = operatorParams[i];
 
-      let sourceNode: AudioScheduledSourceNode;
+      // Oscillator
+      const osc = this.audioContext.createOscillator();
+      osc.frequency.value = baseFrequency * params.ratio;
 
-      // OP1 can use noise, others use oscillator
-      if (i === 0 && params.useNoise) {
-        // Create noise using buffer source
-        const bufferSize = this.audioContext.sampleRate * 2; // 2 seconds of noise
-        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let j = 0; j < bufferSize; j++) {
-          data[j] = Math.random() * 2 - 1;
-        }
-        const noise = this.audioContext.createBufferSource();
-        noise.buffer = buffer;
-        noise.loop = true;
-        sourceNode = noise;
-      } else {
-        // Oscillator
-        const osc = this.audioContext.createOscillator();
-        osc.frequency.value = baseFrequency * params.ratio;
-
-        // Apply pitch envelope if provided
-        if (pitchEnvelope && pitchEnvelope.depth > 0) {
-          const pitchDepth = baseFrequency * params.ratio * pitchEnvelope.depth;
-          osc.frequency.setValueAtTime(baseFrequency * params.ratio + pitchDepth, currentTime);
-          osc.frequency.linearRampToValueAtTime(
-            baseFrequency * params.ratio + pitchDepth * 0.5,
-            currentTime + pitchEnvelope.attack
-          );
-          osc.frequency.linearRampToValueAtTime(
-            baseFrequency * params.ratio,
-            currentTime + pitchEnvelope.attack + pitchEnvelope.decay
-          );
-        }
-        sourceNode = osc;
+      // Apply pitch envelope if provided
+      if (pitchEnvelope && pitchEnvelope.depth > 0) {
+        const pitchDepth = baseFrequency * params.ratio * pitchEnvelope.depth;
+        osc.frequency.setValueAtTime(baseFrequency * params.ratio + pitchDepth, currentTime);
+        osc.frequency.linearRampToValueAtTime(
+          baseFrequency * params.ratio + pitchDepth * 0.5,
+          currentTime + pitchEnvelope.attack
+        );
+        osc.frequency.linearRampToValueAtTime(
+          baseFrequency * params.ratio,
+          currentTime + pitchEnvelope.attack + pitchEnvelope.decay
+        );
       }
 
       // Envelope gain
@@ -175,20 +157,20 @@ export class FMSynth {
       feedbackGain.gain.value = params.feedbackAmount;
 
       // Connect feedback loop
-      sourceNode.connect(feedbackDelay);
+      osc.connect(feedbackDelay);
       feedbackDelay.connect(feedbackGain);
       feedbackGain.connect(feedbackDelay);
 
       // Main signal path
-      sourceNode.connect(envGain);
+      osc.connect(envGain);
       feedbackDelay.connect(envGain);
       envGain.connect(opGain);
 
-      tempOperators.push(sourceNode as OscillatorNode);
+      tempOperators.push(osc);
       tempGains.push(opGain);
       tempEnvGains.push(envGain);
 
-      this.operators.push(sourceNode as OscillatorNode);
+      this.operators.push(osc);
       this.gains.push(opGain);
       this.envelopes.push(envGain);
       this.feedbackNodes.push(feedbackDelay);
@@ -245,9 +227,9 @@ export class FMSynth {
 
       this.lfo.connect(this.lfoGain);
 
-      // Apply LFO to all operators (only oscillators, not noise)
+      // Apply LFO to all operators
       this.operators.forEach(osc => {
-        if (this.lfoGain && osc instanceof OscillatorNode) {
+        if (this.lfoGain) {
           this.lfoGain.connect(osc.frequency);
         }
       });
@@ -276,7 +258,7 @@ export class FMSynth {
       case 'serial':
         // 0->1->2->3->output (serial chain)
         for (let i = 0; i < 4; i++) {
-          if (i < 3 && operators[i + 1] instanceof OscillatorNode) {
+          if (i < 3) {
             const modGain = this.audioContext.createGain();
             modGain.gain.value = operatorParams[i].level * (1000 - i * 200);
             gains[i].connect(modGain);
@@ -296,23 +278,15 @@ export class FMSynth {
 
       case 'hybrid1': {
         // 0->1, 2->3, both to output
-        if (operators[1] instanceof OscillatorNode) {
-          const modGain0 = this.audioContext.createGain();
-          modGain0.gain.value = operatorParams[0].level * 1000;
-          gains[0].connect(modGain0);
-          modGain0.connect(operators[1].frequency);
-        } else {
-          gains[0].connect(this.masterGain);
-        }
+        const modGain0 = this.audioContext.createGain();
+        modGain0.gain.value = operatorParams[0].level * 1000;
+        gains[0].connect(modGain0);
+        modGain0.connect(operators[1].frequency);
 
-        if (operators[3] instanceof OscillatorNode) {
-          const modGain2 = this.audioContext.createGain();
-          modGain2.gain.value = operatorParams[2].level * 1000;
-          gains[2].connect(modGain2);
-          modGain2.connect(operators[3].frequency);
-        } else {
-          gains[2].connect(this.masterGain);
-        }
+        const modGain2 = this.audioContext.createGain();
+        modGain2.gain.value = operatorParams[2].level * 1000;
+        gains[2].connect(modGain2);
+        modGain2.connect(operators[3].frequency);
 
         gains[1].connect(this.masterGain);
         gains[3].connect(this.masterGain);
@@ -321,23 +295,15 @@ export class FMSynth {
 
       case 'hybrid2': {
         // 0->1->2, 3 separate, both to output
-        if (operators[1] instanceof OscillatorNode) {
-          const modGain0h2 = this.audioContext.createGain();
-          modGain0h2.gain.value = operatorParams[0].level * 1000;
-          gains[0].connect(modGain0h2);
-          modGain0h2.connect(operators[1].frequency);
-        } else {
-          gains[0].connect(this.masterGain);
-        }
+        const modGain0h2 = this.audioContext.createGain();
+        modGain0h2.gain.value = operatorParams[0].level * 1000;
+        gains[0].connect(modGain0h2);
+        modGain0h2.connect(operators[1].frequency);
 
-        if (operators[2] instanceof OscillatorNode) {
-          const modGain1h2 = this.audioContext.createGain();
-          modGain1h2.gain.value = operatorParams[1].level * 800;
-          gains[1].connect(modGain1h2);
-          modGain1h2.connect(operators[2].frequency);
-        } else {
-          gains[1].connect(this.masterGain);
-        }
+        const modGain1h2 = this.audioContext.createGain();
+        modGain1h2.gain.value = operatorParams[1].level * 800;
+        gains[1].connect(modGain1h2);
+        modGain1h2.connect(operators[2].frequency);
 
         gains[2].connect(this.masterGain);
         gains[3].connect(this.masterGain);
