@@ -18,13 +18,10 @@ interface TrackData {
   lfoEnabled: boolean;
   pitchEnabled: boolean;
   pitchLocked: boolean; // Lock pitch map editing
-  sidechainEnabled: boolean;
-  sidechainGain: GainNode | null; // For tracks 2,3,4 to receive sidechain signal
-  sidechainThreshold: number; // Sidechain compression threshold (0-1)
-  sidechainRatio: number; // Sidechain compression ratio (1-20)
-  sidechainAttack: number; // How fast compression starts (0-1, lower = faster)
-  sidechainRelease: number; // How fast compression stops (0-1, lower = faster)
-  sidechainMakeup: number; // Makeup gain after compression (0-2, 1 = no change)
+  duckingEnabled: boolean;
+  duckingGain: GainNode | null; // For tracks 2,3,4 to receive ducking signal
+  duckingAmount: number; // How much to reduce volume (0-1, 0 = mute, 1 = no change)
+  duckingRelease: number; // How fast to return to normal (seconds)
 }
 
 export const Sequencer = () => {
@@ -33,13 +30,10 @@ export const Sequencer = () => {
   const [stepCount, setStepCount] = useState(16);
   const [currentStep, setCurrentStep] = useState(0);
   const [tracks, setTracks] = useState<TrackData[]>([]);
-  const [sidechainLevels, setSidechainLevels] = useState<{[key: number]: {rms: number, gainReduction: number}}>({});
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
   const tracksRef = useRef<TrackData[]>([]);
-  const sidechainAnalyzerRef = useRef<AnalyserNode | null>(null);
-  const sidechainDetectorRef = useRef<number | null>(null);
 
   // Keep tracksRef in sync with tracks state
   useEffect(() => {
@@ -56,22 +50,16 @@ export const Sequencer = () => {
       trackSynths.push(new FMSynth(audioContextRef.current));
     }
 
-    // Set up sidechain analyzer on track 1
-    sidechainAnalyzerRef.current = audioContextRef.current.createAnalyser();
-    sidechainAnalyzerRef.current.fftSize = 256;
-    // Connect track 1 synth to analyzer
-    trackSynths[0].connectAnalyzer(sidechainAnalyzerRef.current);
-
-    // Create sidechain gain nodes for tracks 2, 3, 4
-    const sidechainGains: GainNode[] = [];
+    // Create ducking gain nodes for tracks 2, 3, 4
+    const duckingGains: GainNode[] = [];
     for (let i = 0; i < 4; i++) {
       if (i > 0) {
         const gain = audioContextRef.current.createGain();
-        gain.gain.value = 1; // No compression initially
-        sidechainGains.push(gain);
+        gain.gain.value = 1; // No ducking initially
+        duckingGains.push(gain);
         trackSynths[i].connectSidechainGain(gain);
       } else {
-        sidechainGains.push(null as any);
+        duckingGains.push(null as any);
       }
     }
 
@@ -97,13 +85,10 @@ export const Sequencer = () => {
         lfoEnabled: false,
         pitchEnabled: true,
         pitchLocked: false,
-        sidechainEnabled: false,
-        sidechainGain: sidechainGains[0],
-        sidechainThreshold: 0.2,
-        sidechainRatio: 4,
-        sidechainAttack: 0.1,
-        sidechainRelease: 0.3,
-        sidechainMakeup: 1.0,
+        duckingEnabled: false,
+        duckingGain: duckingGains[0],
+        duckingAmount: 0.3, // Duck to 30%
+        duckingRelease: 0.2, // 200ms release
       },
       {
         id: 1,
@@ -126,13 +111,10 @@ export const Sequencer = () => {
         lfoEnabled: true,
         pitchEnabled: true,
         pitchLocked: false,
-        sidechainEnabled: false,
-        sidechainGain: sidechainGains[1],
-        sidechainThreshold: 0.2,
-        sidechainRatio: 4,
-        sidechainAttack: 0.1,
-        sidechainRelease: 0.3,
-        sidechainMakeup: 1.0,
+        duckingEnabled: false,
+        duckingGain: duckingGains[1],
+        duckingAmount: 0.3,
+        duckingRelease: 0.2,
       },
       {
         id: 2,
@@ -155,13 +137,10 @@ export const Sequencer = () => {
         lfoEnabled: true,
         pitchEnabled: false,
         pitchLocked: false,
-        sidechainEnabled: false,
-        sidechainGain: sidechainGains[2],
-        sidechainThreshold: 0.2,
-        sidechainRatio: 4,
-        sidechainAttack: 0.1,
-        sidechainRelease: 0.3,
-        sidechainMakeup: 1.0,
+        duckingEnabled: false,
+        duckingGain: duckingGains[2],
+        duckingAmount: 0.3,
+        duckingRelease: 0.2,
       },
       {
         id: 3,
@@ -184,120 +163,44 @@ export const Sequencer = () => {
         lfoEnabled: true,
         pitchEnabled: true,
         pitchLocked: false,
-        sidechainEnabled: false,
-        sidechainGain: sidechainGains[3],
-        sidechainThreshold: 0.2,
-        sidechainRatio: 4,
-        sidechainAttack: 0.1,
-        sidechainRelease: 0.3,
-        sidechainMakeup: 1.0,
+        duckingEnabled: false,
+        duckingGain: duckingGains[3],
+        duckingAmount: 0.3,
+        duckingRelease: 0.2,
       },
     ];
 
     setTracks(initialTracks);
 
-    // Start sidechain detector loop
-    const dataArray = new Uint8Array(sidechainAnalyzerRef.current.frequencyBinCount);
-    const detectSidechain = () => {
-      if (!sidechainAnalyzerRef.current) return;
-
-      sidechainAnalyzerRef.current.getByteFrequencyData(dataArray);
-
-      // Calculate RMS amplitude
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i] * dataArray[i];
-      }
-      const rms = Math.sqrt(sum / dataArray.length) / 255; // Normalize to 0-1
-
-      // Apply gain reduction to tracks with sidechain enabled
-      const newLevels: {[key: number]: {rms: number, gainReduction: number}} = {};
-
-      // Debug: log RMS every 100 frames
-      if (Math.random() < 0.01 && rms > 0) {
-        console.log('Sidechain RMS:', rms.toFixed(3));
-      }
-
-      tracksRef.current.forEach((track) => {
-        if (track.sidechainEnabled && track.sidechainGain) {
-          // Compression: reduce gain when track 1 is loud
-          // Use track-specific threshold and ratio
-          const thresholdLinear = track.sidechainThreshold;
-          const ratio = track.sidechainRatio;
-          const attack = track.sidechainAttack;
-          const release = track.sidechainRelease;
-          const makeup = track.sidechainMakeup;
-
-          // Convert to dB for proper compression calculation
-          // RMS is already normalized 0-1, convert to dB (with floor of -60dB)
-          const inputDb = rms > 0.00001 ? 20 * Math.log10(rms) : -60;
-          const thresholdDb = thresholdLinear > 0.00001 ? 20 * Math.log10(thresholdLinear) : -60;
-
-          let outputDb = inputDb;
-
-          // Apply compression if above threshold
-          if (inputDb > thresholdDb) {
-            // Gain reduction formula: (Input - Threshold) / Ratio + Threshold
-            const overThresholdDb = inputDb - thresholdDb;
-            const gainReductionDb = overThresholdDb - (overThresholdDb / ratio);
-            outputDb = inputDb - gainReductionDb;
-          }
-
-          // Convert back to linear gain
-          const targetGain = Math.pow(10, (outputDb - inputDb) / 20);
-
-          // Apply makeup gain
-          const targetGainWithMakeup = targetGain * makeup;
-
-          // Smooth the gain change with attack/release (in linear domain)
-          const currentGain = track.sidechainGain.gain.value;
-          const isCompressing = targetGainWithMakeup < currentGain;
-          // Attack/Release are 0-1, convert to smoothing factor (lower value = faster)
-          const attackTime = attack * 0.9 + 0.05; // 0.05 to 0.95
-          const releaseTime = release * 0.9 + 0.05;
-          const smoothFactor = isCompressing ? attackTime : releaseTime;
-          const smoothedGain = currentGain * smoothFactor + targetGainWithMakeup * (1 - smoothFactor);
-
-          const finalGain = Math.max(0.01, Math.min(2, smoothedGain));
-          track.sidechainGain.gain.value = finalGain;
-
-          // Debug: log compression
-          if (Math.random() < 0.01 && inputDb > thresholdDb) {
-            console.log(`Track ${track.id} SC: Input=${inputDb.toFixed(1)}dB, Threshold=${thresholdDb.toFixed(1)}dB, Gain=${finalGain.toFixed(3)} (${(finalGain*100).toFixed(0)}%)`);
-          }
-
-          // Store level info for visualization
-          newLevels[track.id] = {
-            rms: rms,
-            gainReduction: finalGain
-          };
-        } else if (track.sidechainGain) {
-          // Reset gain when sidechain is disabled
-          track.sidechainGain.gain.value = 1;
-        }
-      });
-
-      // Update state for visualization (throttle to avoid too many updates)
-      if (Math.random() < 0.1) { // Update ~10% of frames
-        setSidechainLevels(newLevels);
-      }
-
-      sidechainDetectorRef.current = requestAnimationFrame(detectSidechain);
-    };
-    detectSidechain();
-
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
-      }
-      if (sidechainDetectorRef.current) {
-        cancelAnimationFrame(sidechainDetectorRef.current);
       }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
     };
   }, []);
+
+  // Ducking helper function
+  const triggerDucking = () => {
+    const currentTime = audioContextRef.current?.currentTime || 0;
+
+    tracksRef.current.forEach((track) => {
+      if (track.duckingEnabled && track.duckingGain) {
+        const releaseTime = track.duckingRelease;
+        const duckAmount = track.duckingAmount;
+
+        // Instant duck down
+        track.duckingGain.gain.cancelScheduledValues(currentTime);
+        track.duckingGain.gain.setValueAtTime(track.duckingGain.gain.value, currentTime);
+        track.duckingGain.gain.linearRampToValueAtTime(duckAmount, currentTime + 0.001);
+
+        // Release back to 1.0
+        track.duckingGain.gain.linearRampToValueAtTime(1.0, currentTime + 0.001 + releaseTime);
+      }
+    });
+  };
 
   // Playback engine
   useEffect(() => {
@@ -332,6 +235,11 @@ export const Sequencer = () => {
                 track.algorithm,
                 effectivePitchEnv
               );
+
+              // Trigger ducking when CH1 (Kick) plays
+              if (track.id === 0) {
+                triggerDucking();
+              }
             }
           });
 
@@ -458,10 +366,10 @@ export const Sequencer = () => {
     );
   };
 
-  const toggleSidechain = (trackId: number) => {
+  const toggleDucking = (trackId: number) => {
     setTracks(prev =>
       prev.map(track =>
-        track.id === trackId ? { ...track, sidechainEnabled: !track.sidechainEnabled } : track
+        track.id === trackId ? { ...track, duckingEnabled: !track.duckingEnabled } : track
       )
     );
   };
@@ -474,42 +382,18 @@ export const Sequencer = () => {
     );
   };
 
-  const updateSidechainThreshold = (trackId: number, threshold: number) => {
+  const updateDuckingAmount = (trackId: number, amount: number) => {
     setTracks(prev =>
       prev.map(track =>
-        track.id === trackId ? { ...track, sidechainThreshold: threshold } : track
+        track.id === trackId ? { ...track, duckingAmount: amount } : track
       )
     );
   };
 
-  const updateSidechainRatio = (trackId: number, ratio: number) => {
+  const updateDuckingRelease = (trackId: number, release: number) => {
     setTracks(prev =>
       prev.map(track =>
-        track.id === trackId ? { ...track, sidechainRatio: ratio } : track
-      )
-    );
-  };
-
-  const updateSidechainAttack = (trackId: number, attack: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, sidechainAttack: attack } : track
-      )
-    );
-  };
-
-  const updateSidechainRelease = (trackId: number, release: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, sidechainRelease: release } : track
-      )
-    );
-  };
-
-  const updateSidechainMakeup = (trackId: number, makeup: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, sidechainMakeup: makeup } : track
+        track.id === trackId ? { ...track, duckingRelease: release } : track
       )
     );
   };
@@ -542,6 +426,22 @@ export const Sequencer = () => {
             decay: Math.random() * 0.2 + 0.05,
             depth: Math.random() * 1.5,
           },
+        };
+      })
+    );
+  };
+
+  const randomizeSequence = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track => {
+        if (track.id !== trackId) return track;
+
+        // Generate random pattern with about 25% density
+        const randomSteps = track.steps.map(() => Math.random() < 0.25);
+
+        return {
+          ...track,
+          steps: randomSteps,
         };
       })
     );
@@ -697,6 +597,20 @@ export const Sequencer = () => {
                 }}
               >
                 RAND
+              </button>
+              <button
+                onClick={() => randomizeSequence(track.id)}
+                style={{
+                  background: '#4a4a4a',
+                  color: '#e0e0e0',
+                  border: '1px solid #5a5a5a',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                }}
+              >
+                RAND SEQ
               </button>
               <select
                 value={track.algorithm}
@@ -856,148 +770,70 @@ export const Sequencer = () => {
             </div>
           </div>
 
-          {/* Sidechain - Only for tracks 2, 3, 4 */}
-          {track.id >= 1 && track.sidechainEnabled && (
+          {/* Ducking - Only for tracks 2, 3, 4 */}
+          {track.id >= 1 && track.duckingEnabled && (
             <div style={{ marginTop: '12px', padding: '12px', background: '#3a3a3a', borderRadius: '4px' }}>
-              {/* Visual Indicator */}
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '13px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Sidechain Input Level</span>
-                  <span style={{ color: '#90caf9', fontWeight: '500' }}>
-                    {sidechainLevels[track.id]
-                      ? `${(sidechainLevels[track.id].rms * 100).toFixed(1)}% ${sidechainLevels[track.id].rms > track.sidechainThreshold ? '🔴' : '⚪'}`
-                      : '0%'}
-                  </span>
-                </div>
-                <div style={{ height: '8px', background: '#2a2a2a', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
-                  {/* RMS Level Bar */}
-                  <div style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: `${(sidechainLevels[track.id]?.rms || 0) * 100}%`,
-                    background: sidechainLevels[track.id]?.rms > track.sidechainThreshold ? '#ff5252' : '#4caf50',
-                    transition: 'width 0.05s linear'
-                  }} />
-                  {/* Threshold Marker */}
-                  <div style={{
-                    position: 'absolute',
-                    left: `${track.sidechainThreshold * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: '2px',
-                    background: '#fff',
-                    opacity: 0.8
-                  }} />
-                </div>
-                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Threshold: {(track.sidechainThreshold * 100).toFixed(0)}%</span>
-                  <span>Gain: {sidechainLevels[track.id] ? `${(sidechainLevels[track.id].gainReduction * 100).toFixed(0)}%` : '100%'}</span>
-                </div>
-              </div>
+              <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>Ducking from CH1</div>
 
               {/* Parameters */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>SC Threshold</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.sidechainThreshold}
-                  onChange={e => updateSidechainThreshold(track.id, Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.sidechainThreshold.toFixed(2)}</div>
-              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Duck Amount</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={track.duckingAmount}
+                    onChange={e => updateDuckingAmount(track.id, Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.duckingAmount * 100).toFixed(0)}%</div>
+                </div>
 
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>SC Ratio</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={20}
-                  step={0.1}
-                  value={track.sidechainRatio}
-                  onChange={e => updateSidechainRatio(track.id, Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.sidechainRatio.toFixed(1)}:1</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>SC Attack</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.sidechainAttack}
-                  onChange={e => updateSidechainAttack(track.id, Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.sidechainAttack.toFixed(2)}</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>SC Release</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.sidechainRelease}
-                  onChange={e => updateSidechainRelease(track.id, Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.sidechainRelease.toFixed(2)}</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>SC Makeup</label>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.01}
-                  value={track.sidechainMakeup}
-                  onChange={e => updateSidechainMakeup(track.id, Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.sidechainMakeup.toFixed(2)}x</div>
-              </div>
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Release Time</label>
+                  <input
+                    type="range"
+                    min={0.01}
+                    max={1}
+                    step={0.01}
+                    value={track.duckingRelease}
+                    onChange={e => updateDuckingRelease(track.id, Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.duckingRelease.toFixed(2)}s</div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Sidechain Toggle - Only for tracks 2, 3, 4 when disabled */}
-          {track.id >= 1 && !track.sidechainEnabled && (
+          {/* Ducking Toggle - Only for tracks 2, 3, 4 when disabled */}
+          {track.id >= 1 && !track.duckingEnabled && (
             <div style={{ marginTop: '12px', padding: '12px', background: '#3a3a3a', borderRadius: '4px' }}>
               <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input
                   type="checkbox"
-                  checked={track.sidechainEnabled}
-                  onChange={() => toggleSidechain(track.id)}
+                  checked={track.duckingEnabled}
+                  onChange={() => toggleDucking(track.id)}
                   style={{ width: '16px', height: '16px' }}
                 />
-                Enable Sidechain from CH1
+                Enable Ducking from CH1
               </label>
             </div>
           )}
 
-          {/* Sidechain Toggle (when enabled) */}
-          {track.id >= 1 && track.sidechainEnabled && (
+          {/* Ducking Toggle (when enabled) */}
+          {track.id >= 1 && track.duckingEnabled && (
             <div style={{ marginTop: '12px', padding: '8px 12px', background: '#454545', borderRadius: '4px' }}>
               <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input
                   type="checkbox"
-                  checked={track.sidechainEnabled}
-                  onChange={() => toggleSidechain(track.id)}
+                  checked={track.duckingEnabled}
+                  onChange={() => toggleDucking(track.id)}
                   style={{ width: '16px', height: '16px' }}
                 />
-                Sidechain Enabled
+                Ducking Enabled
               </label>
             </div>
           )}
