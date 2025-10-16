@@ -20,6 +20,12 @@ export const Sequencer = () => {
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const tracksRef = useRef<TrackData[]>([]);
+
+  // Keep tracksRef in sync with tracks state
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   // Initialize audio context and tracks
   useEffect(() => {
@@ -108,8 +114,8 @@ export const Sequencer = () => {
         setCurrentStep(prev => {
           const currentStepToPlay = prev;
 
-          // Trigger sounds for active steps
-          tracks.forEach(track => {
+          // Trigger sounds for active steps using latest tracks from ref
+          tracksRef.current.forEach(track => {
             if (track.steps[currentStepToPlay]) {
               const synth = new FMSynth(audioContextRef.current!);
               synth.trigger(track.frequency, stepDuration / 1000, track.operators, track.lfo);
@@ -131,7 +137,7 @@ export const Sequencer = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, bpm, stepCount, tracks]);
+  }, [isPlaying, bpm, stepCount]);
 
   const toggleStep = (trackId: number, stepIndex: number) => {
     setTracks(prev =>
