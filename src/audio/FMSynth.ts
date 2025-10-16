@@ -25,6 +25,20 @@ export class FMSynth {
     this.masterGain.gain.value = 0.25;
   }
 
+  connectAnalyzer(analyzer: AnalyserNode) {
+    // Connect to analyzer for sidechain detection
+    // Don't disconnect from destination
+    this.masterGain.connect(analyzer);
+  }
+
+  connectSidechainGain(gain: GainNode) {
+    // Disconnect only from destination, keep analyzer connection
+    this.masterGain.disconnect(this.audioContext.destination);
+    // Connect through sidechain gain node
+    this.masterGain.connect(gain);
+    gain.connect(this.audioContext.destination);
+  }
+
   noteOff() {
     if (!this.isPlaying || this.releaseScheduled) return;
 
@@ -82,7 +96,6 @@ export class FMSynth {
     const tempOperators: OscillatorNode[] = [];
     const tempGains: GainNode[] = [];
     const tempEnvGains: GainNode[] = [];
-    const modGains: GainNode[] = [];
 
     // Create all 4 operators first
     for (let i = 0; i < 4; i++) {
@@ -169,7 +182,7 @@ export class FMSynth {
     }
 
     // Connect FM routing based on algorithm
-    this.connectAlgorithm(algorithm, tempOperators, tempGains, tempEnvGains, operatorParams, modGains);
+    this.connectAlgorithm(algorithm, tempOperators, tempGains, tempEnvGains, operatorParams);
 
     // Calculate stop time with max release
     const maxRelease = Math.max(...operatorParams.map(op => op.release));
@@ -215,9 +228,8 @@ export class FMSynth {
     algorithm: FMAlgorithm,
     operators: OscillatorNode[],
     gains: GainNode[],
-    envGains: GainNode[],
-    operatorParams: OperatorParams[],
-    modGains: GainNode[]
+    _envGains: GainNode[],
+    operatorParams: OperatorParams[]
   ) {
     switch (algorithm) {
       case 'serial':
@@ -228,7 +240,6 @@ export class FMSynth {
             modGain.gain.value = operatorParams[i].level * (1000 - i * 200);
             gains[i].connect(modGain);
             modGain.connect(operators[i + 1].frequency);
-            modGains.push(modGain);
           } else {
             gains[i].connect(this.masterGain);
           }
@@ -242,41 +253,39 @@ export class FMSynth {
         }
         break;
 
-      case 'hybrid1':
+      case 'hybrid1': {
         // 0->1, 2->3, both to output
         const modGain0 = this.audioContext.createGain();
         modGain0.gain.value = operatorParams[0].level * 1000;
         gains[0].connect(modGain0);
         modGain0.connect(operators[1].frequency);
-        modGains.push(modGain0);
 
         const modGain2 = this.audioContext.createGain();
         modGain2.gain.value = operatorParams[2].level * 1000;
         gains[2].connect(modGain2);
         modGain2.connect(operators[3].frequency);
-        modGains.push(modGain2);
 
         gains[1].connect(this.masterGain);
         gains[3].connect(this.masterGain);
         break;
+      }
 
-      case 'hybrid2':
+      case 'hybrid2': {
         // 0->1->2, 3 separate, both to output
         const modGain0h2 = this.audioContext.createGain();
         modGain0h2.gain.value = operatorParams[0].level * 1000;
         gains[0].connect(modGain0h2);
         modGain0h2.connect(operators[1].frequency);
-        modGains.push(modGain0h2);
 
         const modGain1h2 = this.audioContext.createGain();
         modGain1h2.gain.value = operatorParams[1].level * 800;
         gains[1].connect(modGain1h2);
         modGain1h2.connect(operators[2].frequency);
-        modGains.push(modGain1h2);
 
         gains[2].connect(this.masterGain);
         gains[3].connect(this.masterGain);
         break;
+      }
     }
   }
 
