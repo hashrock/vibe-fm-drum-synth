@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { FMSynth } from '../audio/FMSynth';
-import type { OperatorParams, LFOParams } from '../audio/types';
+import type { OperatorParams, LFOParams, PitchEnvelopeParams, FMAlgorithm } from '../audio/types';
 
 interface TrackData {
   id: number;
@@ -9,6 +9,9 @@ interface TrackData {
   frequency: number;
   operators: OperatorParams[];
   lfo: LFOParams;
+  algorithm: FMAlgorithm;
+  pitchEnvelope: PitchEnvelopeParams;
+  pitchMap: number[];
 }
 
 export const Sequencer = () => {
@@ -51,6 +54,9 @@ export const Sequencer = () => {
           { frequency: 55, ratio: 0.1, level: 0.1, attack: 0.001, decay: 0.03, sustain: 0.0, release: 0.05, feedbackAmount: 0 },
         ],
         lfo: { frequency: 0, depth: 0 },
+        algorithm: 'serial' as FMAlgorithm,
+        pitchEnvelope: { attack: 0.01, decay: 0.05, depth: 0.5 },
+        pitchMap: new Array(64).fill(1),
       },
       {
         id: 1,
@@ -64,6 +70,9 @@ export const Sequencer = () => {
           { frequency: 200, ratio: 5.1, level: 0.2, attack: 0.001, decay: 0.03, sustain: 0.01, release: 0.05, feedbackAmount: 0.2 },
         ],
         lfo: { frequency: 10, depth: 0.05 },
+        algorithm: 'serial' as FMAlgorithm,
+        pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
+        pitchMap: new Array(64).fill(1),
       },
       {
         id: 2,
@@ -77,6 +86,9 @@ export const Sequencer = () => {
           { frequency: 800, ratio: 6.2, level: 0.1, attack: 0.001, decay: 0.008, sustain: 0.0, release: 0.02, feedbackAmount: 0.4 },
         ],
         lfo: { frequency: 20, depth: 0.1 },
+        algorithm: 'parallel' as FMAlgorithm,
+        pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
+        pitchMap: new Array(64).fill(1),
       },
       {
         id: 3,
@@ -90,6 +102,9 @@ export const Sequencer = () => {
           { frequency: 110, ratio: 3.2, level: 0.2, attack: 0.001, decay: 0.08, sustain: 0.05, release: 0.08, feedbackAmount: 0 },
         ],
         lfo: { frequency: 5, depth: 0.03 },
+        algorithm: 'hybrid1' as FMAlgorithm,
+        pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
+        pitchMap: new Array(64).fill(1),
       },
     ];
 
@@ -118,7 +133,16 @@ export const Sequencer = () => {
           tracksRef.current.forEach(track => {
             if (track.steps[currentStepToPlay]) {
               const synth = new FMSynth(audioContextRef.current!);
-              synth.trigger(track.frequency, stepDuration / 1000, track.operators, track.lfo);
+              const pitchMultiplier = track.pitchMap[currentStepToPlay] || 1;
+              const adjustedFrequency = track.frequency * pitchMultiplier;
+              synth.trigger(
+                adjustedFrequency,
+                stepDuration / 1000,
+                track.operators,
+                track.lfo,
+                track.algorithm,
+                track.pitchEnvelope
+              );
             }
           });
 
@@ -185,30 +209,81 @@ export const Sequencer = () => {
     );
   };
 
+  const updatePitchEnvelope = (trackId: number, param: keyof PitchEnvelopeParams, value: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId
+          ? { ...track, pitchEnvelope: { ...track.pitchEnvelope, [param]: value } }
+          : track
+      )
+    );
+  };
+
+  const updateAlgorithm = (trackId: number, algorithm: FMAlgorithm) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, algorithm } : track
+      )
+    );
+  };
+
+  const updatePitchMap = (trackId: number, stepIndex: number, pitchMultiplier: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId
+          ? { ...track, pitchMap: track.pitchMap.map((p, i) => (i === stepIndex ? pitchMultiplier : p)) }
+          : track
+      )
+    );
+  };
+
+  const [dragStepInfo, setDragStepInfo] = useState<{ trackId: number; stepIndex: number } | null>(null);
+
+  const handleStepMouseDown = (trackId: number, stepIndex: number, e: React.MouseEvent) => {
+    if (e.button === 0) {
+      toggleStep(trackId, stepIndex);
+      setDragStepInfo({ trackId, stepIndex });
+    }
+  };
+
+  const handleStepMouseMove = (trackId: number, stepIndex: number, e: React.MouseEvent) => {
+    if (dragStepInfo && dragStepInfo.trackId === trackId && dragStepInfo.stepIndex === stepIndex && e.buttons === 1) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const height = rect.height;
+      const pitchMultiplier = Math.max(0.5, Math.min(2, 2 - (y / height) * 1.5));
+      updatePitchMap(trackId, stepIndex, pitchMultiplier);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setDragStepInfo(null);
+  };
+
   return (
-    <div style={{ fontFamily: 'monospace', background: '#1a1a1a', color: '#00ff00', padding: '20px' }}>
-      <h1 style={{ textAlign: 'center', textShadow: '0 0 10px #00ff00' }}>FM SYNTH RHYTHM MACHINE</h1>
+    <div style={{ fontFamily: 'monospace', background: '#1a1a1a', color: '#00ff00', padding: '10px', fontSize: '12px' }} onMouseUp={handleMouseUp}>
+      <h1 style={{ textAlign: 'center', textShadow: '0 0 10px #00ff00', fontSize: '20px', margin: '10px 0' }}>FM SYNTH</h1>
 
       {/* Global Controls */}
-      <div style={{ background: '#2a2a2a', border: '2px solid #00ff00', padding: '15px', marginBottom: '20px', borderRadius: '5px' }}>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ background: '#2a2a2a', border: '1px solid #00ff00', padding: '8px', marginBottom: '10px', borderRadius: '3px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => setIsPlaying(!isPlaying)}
             style={{
               background: '#00ff00',
               color: '#1a1a1a',
               border: 'none',
-              padding: '10px 20px',
-              fontSize: '16px',
+              padding: '6px 12px',
+              fontSize: '12px',
               fontWeight: 'bold',
               cursor: 'pointer',
-              borderRadius: '3px',
+              borderRadius: '2px',
             }}
           >
             {isPlaying ? 'STOP' : 'PLAY'}
           </button>
 
-          <label>
+          <label style={{ fontSize: '11px' }}>
             BPM:
             <input
               type="number"
@@ -217,27 +292,29 @@ export const Sequencer = () => {
               min={40}
               max={300}
               style={{
-                marginLeft: '10px',
-                width: '60px',
+                marginLeft: '5px',
+                width: '50px',
                 background: '#1a1a1a',
                 color: '#00ff00',
                 border: '1px solid #00ff00',
-                padding: '5px',
+                padding: '3px',
+                fontSize: '11px',
               }}
             />
           </label>
 
-          <label>
+          <label style={{ fontSize: '11px' }}>
             Steps:
             <select
               value={stepCount}
               onChange={e => setStepCount(Number(e.target.value))}
               style={{
-                marginLeft: '10px',
+                marginLeft: '5px',
                 background: '#1a1a1a',
                 color: '#00ff00',
                 border: '1px solid #00ff00',
-                padding: '5px',
+                padding: '3px',
+                fontSize: '11px',
               }}
             >
               <option value={16}>16</option>
@@ -252,14 +329,14 @@ export const Sequencer = () => {
               background: '#ff0000',
               color: '#fff',
               border: 'none',
-              padding: '10px 20px',
-              fontSize: '16px',
+              padding: '6px 12px',
+              fontSize: '12px',
               fontWeight: 'bold',
               cursor: 'pointer',
-              borderRadius: '3px',
+              borderRadius: '2px',
             }}
           >
-            CLEAR ALL
+            CLEAR
           </button>
         </div>
       </div>
@@ -270,70 +347,116 @@ export const Sequencer = () => {
           key={track.id}
           style={{
             background: '#2a2a2a',
-            border: '2px solid #00ff00',
-            padding: '15px',
-            marginBottom: '20px',
-            borderRadius: '5px',
+            border: '1px solid #00ff00',
+            padding: '8px',
+            marginBottom: '10px',
+            borderRadius: '3px',
           }}
         >
-          <h3 style={{ marginBottom: '15px' }}>TRACK {track.id + 1}: {track.name}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px' }}>{track.name}</h3>
+            <select
+              value={track.algorithm}
+              onChange={e => updateAlgorithm(track.id, e.target.value as FMAlgorithm)}
+              style={{
+                background: '#1a1a1a',
+                color: '#00ff00',
+                border: '1px solid #00ff00',
+                padding: '2px 5px',
+                fontSize: '10px',
+              }}
+            >
+              <option value="serial">Serial</option>
+              <option value="parallel">Parallel</option>
+              <option value="hybrid1">Hybrid1</option>
+              <option value="hybrid2">Hybrid2</option>
+            </select>
+          </div>
 
-          {/* Step Sequencer */}
+          {/* Step Sequencer with Pitch Control */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${Math.min(stepCount, 16)}, 1fr)`,
-              gap: '5px',
-              marginBottom: '15px',
+              gap: '3px',
+              marginBottom: '8px',
             }}
           >
-            {track.steps.slice(0, stepCount).map((active, i) => (
-              <div
-                key={i}
-                onClick={() => toggleStep(track.id, i)}
-                style={{
-                  aspectRatio: '1',
-                  background: active ? '#00ff00' : '#1a1a1a',
-                  border: `2px solid ${i === currentStep && isPlaying ? '#ffffff' : '#00ff00'}`,
-                  cursor: 'pointer',
-                  borderRadius: '3px',
-                  boxShadow: i === currentStep && isPlaying ? '0 0 15px #00ff00' : 'none',
-                }}
-              />
-            ))}
+            {track.steps.slice(0, stepCount).map((active, i) => {
+              const pitchMult = track.pitchMap[i] || 1;
+              const heightPercent = Math.min(100, ((pitchMult - 0.5) / 1.5) * 100);
+
+              return (
+                <div
+                  key={i}
+                  onMouseDown={(e) => handleStepMouseDown(track.id, i, e)}
+                  onMouseMove={(e) => handleStepMouseMove(track.id, i, e)}
+                  style={{
+                    position: 'relative',
+                    aspectRatio: '1',
+                    background: '#1a1a1a',
+                    border: `1px solid ${i === currentStep && isPlaying ? '#ffffff' : '#00ff00'}`,
+                    cursor: 'pointer',
+                    borderRadius: '2px',
+                    boxShadow: i === currentStep && isPlaying ? '0 0 8px #00ff00' : 'none',
+                  }}
+                >
+                  {active && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: `${heightPercent}%`,
+                        background: '#00ff00',
+                        borderRadius: '1px',
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Operators */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
+          {/* Compact Operators */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px', marginBottom: '6px' }}>
             {track.operators.map((op, opIndex) => (
               <div
                 key={opIndex}
                 style={{
                   background: '#1a1a1a',
                   border: '1px solid #00ff00',
-                  padding: '10px',
-                  borderRadius: '3px',
+                  padding: '4px',
+                  borderRadius: '2px',
                 }}
               >
-                <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', textAlign: 'center', fontSize: '10px' }}>
                   OP{opIndex + 1}
                 </div>
 
-                {['ratio', 'level', 'attack', 'decay', 'sustain', 'release', 'feedbackAmount'].map(param => (
-                  <div key={param} style={{ marginBottom: '5px', fontSize: '11px' }}>
-                    <label style={{ display: 'block', marginBottom: '2px' }}>
-                      {param}: {op[param as keyof OperatorParams].toFixed(3)}
-                    </label>
+                {[
+                  { key: 'ratio', min: 0.1, max: 16 },
+                  { key: 'level', min: 0, max: 1 },
+                  { key: 'attack', min: 0, max: 1 },
+                  { key: 'decay', min: 0, max: 1 },
+                  { key: 'feedbackAmount', min: 0, max: 1 }
+                ].map(({ key, min, max }) => (
+                  <div key={key} style={{ marginBottom: '2px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{key.substring(0, 3)}</span>
+                      <span>{op[key as keyof OperatorParams].toFixed(2)}</span>
+                    </div>
                     <input
                       type="range"
-                      min={param === 'ratio' ? 0.1 : 0}
-                      max={param === 'ratio' ? 16 : param.includes('feedback') ? 1 : param === 'level' ? 1 : 1}
+                      min={min}
+                      max={max}
                       step={0.01}
-                      value={op[param as keyof OperatorParams]}
+                      value={op[key as keyof OperatorParams]}
                       onChange={e =>
-                        updateOperator(track.id, opIndex, param as keyof OperatorParams, Number(e.target.value))
+                        updateOperator(track.id, opIndex, key as keyof OperatorParams, Number(e.target.value))
                       }
-                      style={{ width: '100%' }}
+                      style={{ width: '100%', height: '8px' }}
                     />
                   </div>
                 ))}
@@ -341,10 +464,10 @@ export const Sequencer = () => {
             ))}
           </div>
 
-          {/* LFO Controls */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            <label>
-              LFO Freq: {track.lfo.frequency.toFixed(2)} Hz
+          {/* Compact Global Controls */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px', fontSize: '9px' }}>
+            <div>
+              <div>LFO F: {track.lfo.frequency.toFixed(1)}</div>
               <input
                 type="range"
                 min={0}
@@ -352,12 +475,11 @@ export const Sequencer = () => {
                 step={0.1}
                 value={track.lfo.frequency}
                 onChange={e => updateLFO(track.id, 'frequency', Number(e.target.value))}
-                style={{ marginLeft: '10px', width: '150px' }}
+                style={{ width: '100%', height: '8px' }}
               />
-            </label>
-
-            <label>
-              LFO Depth: {track.lfo.depth.toFixed(2)}
+            </div>
+            <div>
+              <div>LFO D: {track.lfo.depth.toFixed(2)}</div>
               <input
                 type="range"
                 min={0}
@@ -365,9 +487,21 @@ export const Sequencer = () => {
                 step={0.01}
                 value={track.lfo.depth}
                 onChange={e => updateLFO(track.id, 'depth', Number(e.target.value))}
-                style={{ marginLeft: '10px', width: '150px' }}
+                style={{ width: '100%', height: '8px' }}
               />
-            </label>
+            </div>
+            <div>
+              <div>P.Env: {track.pitchEnvelope.depth.toFixed(2)}</div>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.01}
+                value={track.pitchEnvelope.depth}
+                onChange={e => updatePitchEnvelope(track.id, 'depth', Number(e.target.value))}
+                style={{ width: '100%', height: '8px' }}
+              />
+            </div>
           </div>
         </div>
       ))}

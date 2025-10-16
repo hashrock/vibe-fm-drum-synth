@@ -1,6 +1,6 @@
-import type { OperatorParams, LFOParams } from './types';
+import type { OperatorParams, LFOParams, PitchEnvelopeParams, FMAlgorithm } from './types';
 
-export type { OperatorParams, LFOParams } from './types';
+export type { OperatorParams, LFOParams, PitchEnvelopeParams, FMAlgorithm } from './types';
 
 export class FMSynth {
   private audioContext: AudioContext;
@@ -24,7 +24,9 @@ export class FMSynth {
     baseFrequency: number,
     duration: number,
     operatorParams: OperatorParams[],
-    lfoParams: LFOParams
+    lfoParams: LFOParams,
+    algorithm: FMAlgorithm = 'serial',
+    pitchEnvelope?: PitchEnvelopeParams
   ) {
     const currentTime = this.audioContext.currentTime;
 
@@ -40,6 +42,20 @@ export class FMSynth {
       // Oscillator
       const osc = this.audioContext.createOscillator();
       osc.frequency.value = baseFrequency * params.ratio;
+
+      // Apply pitch envelope if provided
+      if (pitchEnvelope && pitchEnvelope.depth > 0) {
+        const pitchDepth = baseFrequency * params.ratio * pitchEnvelope.depth;
+        osc.frequency.setValueAtTime(baseFrequency * params.ratio + pitchDepth, currentTime);
+        osc.frequency.linearRampToValueAtTime(
+          baseFrequency * params.ratio + pitchDepth * 0.5,
+          currentTime + pitchEnvelope.attack
+        );
+        osc.frequency.linearRampToValueAtTime(
+          baseFrequency * params.ratio,
+          currentTime + pitchEnvelope.attack + pitchEnvelope.decay
+        );
+      }
 
       // Envelope gain
       const envGain = this.audioContext.createGain();
@@ -95,22 +111,8 @@ export class FMSynth {
       envGain.gain.linearRampToValueAtTime(0, currentTime + duration);
     }
 
-    // Now connect FM routing: 0->1->2->3->output
-    for (let i = 0; i < 4; i++) {
-      const params = operatorParams[i];
-
-      if (i < 3) {
-        // Operators 0, 1, 2 modulate the next operator
-        const modGain = this.audioContext.createGain();
-        modGain.gain.value = params.level * (1000 - i * 200); // 1000, 800, 600
-        tempGains[i].connect(modGain);
-        modGain.connect(tempOperators[i + 1].frequency);
-        modGains.push(modGain);
-      } else {
-        // Operator 3 goes to output
-        tempGains[i].connect(this.masterGain);
-      }
-    }
+    // Connect FM routing based on algorithm
+    this.connectAlgorithm(algorithm, tempOperators, tempGains, tempEnvGains, operatorParams, modGains);
 
     // Start all oscillators
     for (let i = 0; i < 4; i++) {
@@ -143,6 +145,75 @@ export class FMSynth {
     setTimeout(() => {
       this.cleanup();
     }, duration * 1000 + 100);
+  }
+
+  private connectAlgorithm(
+    algorithm: FMAlgorithm,
+    operators: OscillatorNode[],
+    gains: GainNode[],
+    envGains: GainNode[],
+    operatorParams: OperatorParams[],
+    modGains: GainNode[]
+  ) {
+    switch (algorithm) {
+      case 'serial':
+        // 0->1->2->3->output (serial chain)
+        for (let i = 0; i < 4; i++) {
+          if (i < 3) {
+            const modGain = this.audioContext.createGain();
+            modGain.gain.value = operatorParams[i].level * (1000 - i * 200);
+            gains[i].connect(modGain);
+            modGain.connect(operators[i + 1].frequency);
+            modGains.push(modGain);
+          } else {
+            gains[i].connect(this.masterGain);
+          }
+        }
+        break;
+
+      case 'parallel':
+        // All operators go directly to output
+        for (let i = 0; i < 4; i++) {
+          gains[i].connect(this.masterGain);
+        }
+        break;
+
+      case 'hybrid1':
+        // 0->1, 2->3, both to output
+        const modGain0 = this.audioContext.createGain();
+        modGain0.gain.value = operatorParams[0].level * 1000;
+        gains[0].connect(modGain0);
+        modGain0.connect(operators[1].frequency);
+        modGains.push(modGain0);
+
+        const modGain2 = this.audioContext.createGain();
+        modGain2.gain.value = operatorParams[2].level * 1000;
+        gains[2].connect(modGain2);
+        modGain2.connect(operators[3].frequency);
+        modGains.push(modGain2);
+
+        gains[1].connect(this.masterGain);
+        gains[3].connect(this.masterGain);
+        break;
+
+      case 'hybrid2':
+        // 0->1->2, 3 separate, both to output
+        const modGain0h2 = this.audioContext.createGain();
+        modGain0h2.gain.value = operatorParams[0].level * 1000;
+        gains[0].connect(modGain0h2);
+        modGain0h2.connect(operators[1].frequency);
+        modGains.push(modGain0h2);
+
+        const modGain1h2 = this.audioContext.createGain();
+        modGain1h2.gain.value = operatorParams[1].level * 800;
+        gains[1].connect(modGain1h2);
+        modGain1h2.connect(operators[2].frequency);
+        modGains.push(modGain1h2);
+
+        gains[2].connect(this.masterGain);
+        gains[3].connect(this.masterGain);
+        break;
+    }
   }
 
   private cleanup() {

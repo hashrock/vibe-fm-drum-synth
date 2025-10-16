@@ -13,3 +13,11 @@ export interface LFOParams {
   frequency: number;
   depth: number;
 }
+
+export interface PitchEnvelopeParams {
+  attack: number;
+  decay: number;
+  depth: number;
+}
+
+export type FMAlgorithm = 'serial' | 'parallel' | 'hybrid1' | 'hybrid2';
