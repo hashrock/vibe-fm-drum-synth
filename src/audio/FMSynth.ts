@@ -12,6 +12,8 @@ export class FMSynth {
   private lfo: OscillatorNode | null = null;
   private lfoGain: GainNode | null = null;
   private masterGain: GainNode;
+  private compressor: DynamicsCompressorNode;
+  private limiter: DynamicsCompressorNode;
   private isPlaying: boolean = false;
   private releaseScheduled: boolean = false;
   private currentParams: OperatorParams[] = [];
@@ -20,22 +22,43 @@ export class FMSynth {
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
+
+    // Master gain with lower volume to prevent clipping
     this.masterGain = audioContext.createGain();
-    this.masterGain.connect(audioContext.destination);
-    this.masterGain.gain.value = 0.25;
+    this.masterGain.gain.value = 0.15; // Reduced from 0.25
+
+    // Compressor to control dynamics
+    this.compressor = audioContext.createDynamicsCompressor();
+    this.compressor.threshold.value = -24;
+    this.compressor.knee.value = 30;
+    this.compressor.ratio.value = 12;
+    this.compressor.attack.value = 0.003;
+    this.compressor.release.value = 0.25;
+
+    // Limiter to prevent clipping
+    this.limiter = audioContext.createDynamicsCompressor();
+    this.limiter.threshold.value = -6;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.001;
+    this.limiter.release.value = 0.01;
+
+    // Signal chain: masterGain -> compressor -> limiter -> destination
+    this.masterGain.connect(this.compressor);
+    this.compressor.connect(this.limiter);
+    this.limiter.connect(audioContext.destination);
   }
 
   connectAnalyzer(analyzer: AnalyserNode) {
-    // Connect to analyzer for sidechain detection
-    // Don't disconnect from destination
-    this.masterGain.connect(analyzer);
+    // Connect compressor to analyzer for monitoring
+    this.compressor.connect(analyzer);
   }
 
   connectSidechainGain(gain: GainNode) {
-    // Disconnect only from destination, keep analyzer connection
-    this.masterGain.disconnect(this.audioContext.destination);
-    // Connect through sidechain gain node
-    this.masterGain.connect(gain);
+    // Disconnect limiter from destination
+    this.limiter.disconnect(this.audioContext.destination);
+    // Connect through ducking gain node: limiter -> gain -> destination
+    this.limiter.connect(gain);
     gain.connect(this.audioContext.destination);
   }
 
@@ -290,12 +313,28 @@ export class FMSynth {
   }
 
   private cleanupImmediate() {
-    // Immediate cleanup without fade (used when new note starts)
+    // Immediate cleanup with quick fade (used when new note starts)
+    const currentTime = this.audioContext.currentTime;
+    const quickFadeTime = 0.001; // 1ms very quick fade
+
+    // Fade out envelopes
+    this.envelopes.forEach(env => {
+      try {
+        const currentGain = env.gain.value;
+        env.gain.cancelScheduledValues(currentTime);
+        env.gain.setValueAtTime(currentGain, currentTime);
+        env.gain.linearRampToValueAtTime(0, currentTime + quickFadeTime);
+      } catch (_e) {
+        // Ignore if already disconnected
+      }
+    });
+
+    // Stop and disconnect immediately (fade happens in audio thread)
     this.operators.forEach(osc => {
       try {
-        osc.stop();
+        osc.stop(currentTime + quickFadeTime + 0.001);
         osc.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Already disconnected
       }
     });
@@ -303,37 +342,37 @@ export class FMSynth {
     this.gains.forEach(gain => {
       try {
         gain.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
     });
     this.envelopes.forEach(env => {
       try {
         env.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
     });
     this.feedbackNodes.forEach(fb => {
       try {
         fb.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
     });
     this.feedbackGains.forEach(fb => {
       try {
         fb.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
     });
 
     if (this.lfo) {
       try {
-        this.lfo.stop();
+        this.lfo.stop(currentTime + quickFadeTime + 0.001);
         this.lfo.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
       this.lfo = null;
@@ -342,7 +381,7 @@ export class FMSynth {
     if (this.lfoGain) {
       try {
         this.lfoGain.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Ignore
       }
       this.lfoGain = null;
@@ -365,14 +404,77 @@ export class FMSynth {
         env.gain.cancelScheduledValues(currentTime);
         env.gain.setValueAtTime(env.gain.value, currentTime);
         env.gain.linearRampToValueAtTime(0, currentTime + fadeTime);
-      } catch (e) {
+      } catch (_e) {
         // Ignore if already disconnected
       }
     });
 
     // Schedule disconnection after fade
     this.cleanupTimer = window.setTimeout(() => {
-      this.cleanupImmediate();
+      // Disconnect without additional fade
+      this.operators.forEach(osc => {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch (_e) {
+          // Already disconnected
+        }
+      });
+
+      this.gains.forEach(gain => {
+        try {
+          gain.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+      });
+      this.envelopes.forEach(env => {
+        try {
+          env.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+      });
+      this.feedbackNodes.forEach(fb => {
+        try {
+          fb.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+      });
+      this.feedbackGains.forEach(fb => {
+        try {
+          fb.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+      });
+
+      if (this.lfo) {
+        try {
+          this.lfo.stop();
+          this.lfo.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+        this.lfo = null;
+      }
+
+      if (this.lfoGain) {
+        try {
+          this.lfoGain.disconnect();
+        } catch (_e) {
+          // Ignore
+        }
+        this.lfoGain = null;
+      }
+
+      this.operators = [];
+      this.gains = [];
+      this.envelopes = [];
+      this.feedbackNodes = [];
+      this.feedbackGains = [];
+
       this.cleanupTimer = null;
     }, fadeTime * 1000 + 5);
   }
