@@ -36,6 +36,12 @@ export const Sequencer = () => {
   useEffect(() => {
     audioContextRef.current = new AudioContext();
 
+    // Create one synth instance per track (reusable)
+    const trackSynths: FMSynth[] = [];
+    for (let i = 0; i < 4; i++) {
+      trackSynths.push(new FMSynth(audioContextRef.current));
+    }
+
     const defaultOperators: OperatorParams[] = [
       { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, decay: 0.1, sustain: 0.3, release: 0.1, feedbackAmount: 0 },
       { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, decay: 0.08, sustain: 0.2, release: 0.08, feedbackAmount: 0 },
@@ -60,7 +66,7 @@ export const Sequencer = () => {
         pitchEnvelope: { attack: 0.01, decay: 0.05, depth: 0.5 },
         pitchMap: new Array(64).fill(1),
         noteLength: 1.0,
-        activeSynth: null,
+        activeSynth: trackSynths[0],
       },
       {
         id: 1,
@@ -78,7 +84,7 @@ export const Sequencer = () => {
         pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
         pitchMap: new Array(64).fill(1),
         noteLength: 1.0,
-        activeSynth: null,
+        activeSynth: trackSynths[1],
       },
       {
         id: 2,
@@ -96,7 +102,7 @@ export const Sequencer = () => {
         pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
         pitchMap: new Array(64).fill(1),
         noteLength: 0.5,
-        activeSynth: null,
+        activeSynth: trackSynths[2],
       },
       {
         id: 3,
@@ -114,7 +120,7 @@ export const Sequencer = () => {
         pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
         pitchMap: new Array(64).fill(1),
         noteLength: 2.0,
-        activeSynth: null,
+        activeSynth: trackSynths[3],
       },
     ];
 
@@ -141,21 +147,15 @@ export const Sequencer = () => {
 
           // Trigger sounds for active steps using latest tracks from ref
           tracksRef.current.forEach(track => {
-            if (track.steps[currentStepToPlay]) {
-              // Stop previous note if playing (monophonic behavior)
-              if (track.activeSynth) {
-                track.activeSynth.noteOff();
-              }
-
-              // Create new synth for this track
-              const synth = new FMSynth(audioContextRef.current!);
+            if (track.steps[currentStepToPlay] && track.activeSynth) {
               const pitchMultiplier = track.pitchMap[currentStepToPlay] || 1;
               const adjustedFrequency = track.frequency * pitchMultiplier;
 
               // Use note length setting (in steps)
               const noteDuration = (stepDuration * track.noteLength) / 1000;
 
-              synth.trigger(
+              // Reuse the same synth instance (monophonic)
+              track.activeSynth.trigger(
                 adjustedFrequency,
                 noteDuration,
                 track.operators,
@@ -163,9 +163,6 @@ export const Sequencer = () => {
                 track.algorithm,
                 track.pitchEnvelope
               );
-
-              // Store synth reference for monophonic behavior
-              track.activeSynth = synth;
             }
           });
 
