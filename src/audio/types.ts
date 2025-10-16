@@ -7,6 +7,7 @@ export interface OperatorParams {
   sustain: number;
   release: number;
   feedbackAmount: number;
+  useNoise?: boolean; // OP1 can use noise instead of oscillator
 }
 
 export interface LFOParams {

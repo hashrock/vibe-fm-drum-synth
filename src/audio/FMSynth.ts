@@ -124,22 +124,40 @@ export class FMSynth {
     for (let i = 0; i < 4; i++) {
       const params = operatorParams[i];
 
-      // Oscillator
-      const osc = this.audioContext.createOscillator();
-      osc.frequency.value = baseFrequency * params.ratio;
+      let sourceNode: AudioScheduledSourceNode;
 
-      // Apply pitch envelope if provided
-      if (pitchEnvelope && pitchEnvelope.depth > 0) {
-        const pitchDepth = baseFrequency * params.ratio * pitchEnvelope.depth;
-        osc.frequency.setValueAtTime(baseFrequency * params.ratio + pitchDepth, currentTime);
-        osc.frequency.linearRampToValueAtTime(
-          baseFrequency * params.ratio + pitchDepth * 0.5,
-          currentTime + pitchEnvelope.attack
-        );
-        osc.frequency.linearRampToValueAtTime(
-          baseFrequency * params.ratio,
-          currentTime + pitchEnvelope.attack + pitchEnvelope.decay
-        );
+      // OP1 can use noise, others use oscillator
+      if (i === 0 && params.useNoise) {
+        // Create noise using buffer source
+        const bufferSize = this.audioContext.sampleRate * 2; // 2 seconds of noise
+        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let j = 0; j < bufferSize; j++) {
+          data[j] = Math.random() * 2 - 1;
+        }
+        const noise = this.audioContext.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+        sourceNode = noise;
+      } else {
+        // Oscillator
+        const osc = this.audioContext.createOscillator();
+        osc.frequency.value = baseFrequency * params.ratio;
+
+        // Apply pitch envelope if provided
+        if (pitchEnvelope && pitchEnvelope.depth > 0) {
+          const pitchDepth = baseFrequency * params.ratio * pitchEnvelope.depth;
+          osc.frequency.setValueAtTime(baseFrequency * params.ratio + pitchDepth, currentTime);
+          osc.frequency.linearRampToValueAtTime(
+            baseFrequency * params.ratio + pitchDepth * 0.5,
+            currentTime + pitchEnvelope.attack
+          );
+          osc.frequency.linearRampToValueAtTime(
+            baseFrequency * params.ratio,
+            currentTime + pitchEnvelope.attack + pitchEnvelope.decay
+          );
+        }
+        sourceNode = osc;
       }
 
       // Envelope gain
@@ -157,20 +175,20 @@ export class FMSynth {
       feedbackGain.gain.value = params.feedbackAmount;
 
       // Connect feedback loop
-      osc.connect(feedbackDelay);
+      sourceNode.connect(feedbackDelay);
       feedbackDelay.connect(feedbackGain);
       feedbackGain.connect(feedbackDelay);
 
       // Main signal path
-      osc.connect(envGain);
+      sourceNode.connect(envGain);
       feedbackDelay.connect(envGain);
       envGain.connect(opGain);
 
-      tempOperators.push(osc);
+      tempOperators.push(sourceNode as OscillatorNode);
       tempGains.push(opGain);
       tempEnvGains.push(envGain);
 
-      this.operators.push(osc);
+      this.operators.push(sourceNode as OscillatorNode);
       this.gains.push(opGain);
       this.envelopes.push(envGain);
       this.feedbackNodes.push(feedbackDelay);
