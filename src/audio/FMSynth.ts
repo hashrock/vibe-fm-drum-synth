@@ -91,33 +91,46 @@ export class FMSynth {
       this.feedbackNodes.push(feedbackDelay);
       this.feedbackGains.push(feedbackGain);
 
-      // AR Envelope with fixed decay and sustain
+      // AD Envelope - Trigger mode with minimal release
       const attack = params.attack;
-      const decay = 0.3; // Fixed longer decay
-      const sustain = 0.5; // Fixed sustain level
-      const release = params.release;
+      const decay = params.decay; // User-controllable decay
+      const release = 0.05; // Fixed minimal release
 
-      // Ensure times are valid and non-negative
+      // Envelope times
       const attackTime = Math.max(0, attack);
       const decayTime = Math.max(0, decay);
-      const releaseTime = Math.max(0, Math.min(release, duration * 0.9));
-      const sustainStart = attackTime + decayTime;
-      const releaseStart = Math.max(sustainStart, duration - releaseTime);
+      const releaseTime = release;
 
+      const attackEnd = currentTime + attackTime;
+      const decayEnd = attackEnd + decayTime;
+      const releaseStart = currentTime + duration; // Release starts when note ends
+      const releaseEnd = releaseStart + releaseTime;
+
+      // Attack: 0 -> 1
       envGain.gain.setValueAtTime(0, currentTime);
-      envGain.gain.linearRampToValueAtTime(1, currentTime + attackTime);
-      envGain.gain.linearRampToValueAtTime(sustain, currentTime + sustainStart);
-      envGain.gain.setValueAtTime(sustain, currentTime + releaseStart);
-      envGain.gain.linearRampToValueAtTime(0, currentTime + duration);
+      envGain.gain.linearRampToValueAtTime(1, attackEnd);
+
+      // Decay: 1 -> 0.2 (sustain at low level until note off)
+      envGain.gain.linearRampToValueAtTime(0.2, decayEnd);
+
+      // Hold at decay level until note off
+      envGain.gain.setValueAtTime(0.2, releaseStart);
+
+      // Quick release: 0.2 -> 0
+      envGain.gain.linearRampToValueAtTime(0, releaseEnd);
     }
 
     // Connect FM routing based on algorithm
     this.connectAlgorithm(algorithm, tempOperators, tempGains, tempEnvGains, operatorParams, modGains);
 
+    // Calculate stop time with fixed minimal release
+    const fixedRelease = 0.05;
+    const oscStopTime = currentTime + duration + fixedRelease;
+
     // Start all oscillators
     for (let i = 0; i < 4; i++) {
       tempOperators[i].start(currentTime);
-      tempOperators[i].stop(currentTime + duration);
+      tempOperators[i].stop(oscStopTime);
     }
 
     // LFO
@@ -138,13 +151,13 @@ export class FMSynth {
       });
 
       this.lfo.start(currentTime);
-      this.lfo.stop(currentTime + duration);
+      this.lfo.stop(oscStopTime);
     }
 
-    // Cleanup
+    // Cleanup after release time
     setTimeout(() => {
       this.cleanup();
-    }, duration * 1000 + 100);
+    }, (duration + fixedRelease) * 1000 + 100);
   }
 
   private connectAlgorithm(

@@ -35,10 +35,10 @@ export const Sequencer = () => {
     audioContextRef.current = new AudioContext();
 
     const defaultOperators: OperatorParams[] = [
-      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, release: 0.1, feedbackAmount: 0 },
-      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, release: 0.08, feedbackAmount: 0 },
-      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, release: 0.05, feedbackAmount: 0 },
-      { frequency: 440, ratio: 8, level: 0.7, attack: 0.001, release: 0.15, feedbackAmount: 0 },
+      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, decay: 0.3, feedbackAmount: 0 },
+      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, decay: 0.25, feedbackAmount: 0 },
+      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, decay: 0.2, feedbackAmount: 0 },
+      { frequency: 440, ratio: 8, level: 0.7, attack: 0.001, decay: 0.4, feedbackAmount: 0 },
     ];
 
     const initialTracks: TrackData[] = [
@@ -48,10 +48,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 55,
         operators: [
-          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, release: 0.2, feedbackAmount: 0.3 },
-          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, release: 0.15, feedbackAmount: 0.2 },
-          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, release: 0.1, feedbackAmount: 0 },
-          { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, release: 0.25, feedbackAmount: 0 },
+          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.3, feedbackAmount: 0.3 },
+          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, decay: 0.25, feedbackAmount: 0.2 },
+          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, decay: 0.2, feedbackAmount: 0 },
+          { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, decay: 0.4, feedbackAmount: 0 },
         ],
         lfo: { frequency: 0, depth: 0 },
         algorithm: 'serial' as FMAlgorithm,
@@ -64,10 +64,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 200,
         operators: [
-          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, release: 0.15, feedbackAmount: 0.5 },
-          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, release: 0.12, feedbackAmount: 0.4 },
-          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, release: 0.08, feedbackAmount: 0.3 },
-          { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, release: 0.2, feedbackAmount: 0.2 },
+          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.2, feedbackAmount: 0.5 },
+          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, decay: 0.18, feedbackAmount: 0.4 },
+          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, decay: 0.15, feedbackAmount: 0.3 },
+          { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, decay: 0.25, feedbackAmount: 0.2 },
         ],
         lfo: { frequency: 10, depth: 0.05 },
         algorithm: 'serial' as FMAlgorithm,
@@ -80,10 +80,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 800,
         operators: [
-          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, release: 0.05, feedbackAmount: 0.7 },
-          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, release: 0.04, feedbackAmount: 0.6 },
-          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, release: 0.03, feedbackAmount: 0.5 },
-          { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, release: 0.08, feedbackAmount: 0.4 },
+          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.1, feedbackAmount: 0.7 },
+          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, decay: 0.08, feedbackAmount: 0.6 },
+          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, decay: 0.06, feedbackAmount: 0.5 },
+          { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, decay: 0.12, feedbackAmount: 0.4 },
         ],
         lfo: { frequency: 20, depth: 0.1 },
         algorithm: 'parallel' as FMAlgorithm,
@@ -96,10 +96,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 110,
         operators: [
-          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, release: 0.2, feedbackAmount: 0.2 },
-          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, release: 0.15, feedbackAmount: 0.1 },
-          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, release: 0.1, feedbackAmount: 0.05 },
-          { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, release: 0.25, feedbackAmount: 0 },
+          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, decay: 0.3, feedbackAmount: 0.2 },
+          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, decay: 0.25, feedbackAmount: 0.1 },
+          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, decay: 0.2, feedbackAmount: 0.05 },
+          { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, decay: 0.35, feedbackAmount: 0 },
         ],
         lfo: { frequency: 5, depth: 0.03 },
         algorithm: 'hybrid1' as FMAlgorithm,
@@ -135,9 +135,20 @@ export const Sequencer = () => {
               const synth = new FMSynth(audioContextRef.current!);
               const pitchMultiplier = track.pitchMap[currentStepToPlay] || 1;
               const adjustedFrequency = track.frequency * pitchMultiplier;
+
+              // Calculate duration until next note (or use step duration if no next note)
+              let noteDuration = stepDuration / 1000;
+              for (let i = 1; i < stepCount; i++) {
+                const nextStepIndex = (currentStepToPlay + i) % stepCount;
+                if (track.steps[nextStepIndex]) {
+                  noteDuration = (stepDuration * i) / 1000;
+                  break;
+                }
+              }
+
               synth.trigger(
                 adjustedFrequency,
-                stepDuration / 1000,
+                noteDuration,
                 track.operators,
                 track.lfo,
                 track.algorithm,
@@ -247,7 +258,7 @@ export const Sequencer = () => {
           ratio: Math.random() * 15 + 0.1,
           level: Math.random() * 0.8 + 0.2,
           attack: 0.001, // Always fast attack
-          release: Math.random() * 0.3 + 0.05,
+          decay: Math.random() * 0.8 + 0.1,
           feedbackAmount: Math.random() * 0.8,
         }));
 
@@ -487,7 +498,7 @@ export const Sequencer = () => {
                   { key: 'ratio', label: 'rat', min: 0.1, max: 16 },
                   { key: 'level', label: 'lev', min: 0, max: 1 },
                   { key: 'attack', label: 'att', min: 0, max: 0.1 },
-                  { key: 'release', label: 'rel', min: 0, max: 1 },
+                  { key: 'decay', label: 'dec', min: 0, max: 2 },
                   { key: 'feedbackAmount', label: 'fb', min: 0, max: 1 }
                 ].map(({ key, label, min, max }) => (
                   <div key={key} style={{ marginBottom: '2px', fontSize: '9px' }}>
