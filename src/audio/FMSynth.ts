@@ -12,12 +12,40 @@ export class FMSynth {
   private lfo: OscillatorNode | null = null;
   private lfoGain: GainNode | null = null;
   private masterGain: GainNode;
+  private isPlaying: boolean = false;
+  private releaseScheduled: boolean = false;
+  private currentParams: OperatorParams[] = [];
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
     this.masterGain = audioContext.createGain();
     this.masterGain.connect(audioContext.destination);
     this.masterGain.gain.value = 0.25;
+  }
+
+  noteOff() {
+    if (!this.isPlaying || this.releaseScheduled) return;
+
+    this.releaseScheduled = true;
+    const currentTime = this.audioContext.currentTime;
+
+    // Trigger release phase for all operators
+    this.currentParams.forEach((params, i) => {
+      if (this.envelopes[i]) {
+        const currentGain = this.envelopes[i].gain.value;
+        this.envelopes[i].gain.cancelScheduledValues(currentTime);
+        this.envelopes[i].gain.setValueAtTime(currentGain, currentTime);
+        this.envelopes[i].gain.linearRampToValueAtTime(0, currentTime + params.release);
+      }
+    });
+
+    // Stop oscillators and cleanup after release
+    const maxRelease = Math.max(...this.currentParams.map(op => op.release));
+    setTimeout(() => {
+      this.cleanup();
+      this.isPlaying = false;
+      this.releaseScheduled = false;
+    }, maxRelease * 1000 + 100);
   }
 
   trigger(
@@ -28,6 +56,14 @@ export class FMSynth {
     algorithm: FMAlgorithm = 'serial',
     pitchEnvelope?: PitchEnvelopeParams
   ) {
+    // If already playing, stop current note first (monophonic)
+    if (this.isPlaying) {
+      this.cleanup();
+    }
+
+    this.isPlaying = true;
+    this.releaseScheduled = false;
+    this.currentParams = operatorParams;
     const currentTime = this.audioContext.currentTime;
 
     const tempOperators: OscillatorNode[] = [];
@@ -91,41 +127,40 @@ export class FMSynth {
       this.feedbackNodes.push(feedbackDelay);
       this.feedbackGains.push(feedbackGain);
 
-      // AD Envelope - Trigger mode with minimal release
+      // Full ADSR Envelope
       const attack = params.attack;
-      const decay = params.decay; // User-controllable decay
-      const release = 0.05; // Fixed minimal release
+      const decay = params.decay;
+      const sustain = params.sustain;
+      const release = params.release;
 
       // Envelope times
       const attackTime = Math.max(0, attack);
       const decayTime = Math.max(0, decay);
-      const releaseTime = release;
 
       const attackEnd = currentTime + attackTime;
       const decayEnd = attackEnd + decayTime;
-      const releaseStart = currentTime + duration; // Release starts when note ends
-      const releaseEnd = releaseStart + releaseTime;
+      const noteEnd = currentTime + duration;
 
       // Attack: 0 -> 1
       envGain.gain.setValueAtTime(0, currentTime);
       envGain.gain.linearRampToValueAtTime(1, attackEnd);
 
-      // Decay: 1 -> 0.2 (sustain at low level until note off)
-      envGain.gain.linearRampToValueAtTime(0.2, decayEnd);
+      // Decay: 1 -> sustain level
+      envGain.gain.linearRampToValueAtTime(sustain, decayEnd);
 
-      // Hold at decay level until note off
-      envGain.gain.setValueAtTime(0.2, releaseStart);
+      // Sustain: hold at sustain level until note off
+      envGain.gain.setValueAtTime(sustain, noteEnd);
 
-      // Quick release: 0.2 -> 0
-      envGain.gain.linearRampToValueAtTime(0, releaseEnd);
+      // Release: sustain -> 0 (will be triggered by noteOff or auto-release)
+      envGain.gain.linearRampToValueAtTime(0, noteEnd + release);
     }
 
     // Connect FM routing based on algorithm
     this.connectAlgorithm(algorithm, tempOperators, tempGains, tempEnvGains, operatorParams, modGains);
 
-    // Calculate stop time with fixed minimal release
-    const fixedRelease = 0.05;
-    const oscStopTime = currentTime + duration + fixedRelease;
+    // Calculate stop time with max release
+    const maxRelease = Math.max(...operatorParams.map(op => op.release));
+    const oscStopTime = currentTime + duration + maxRelease;
 
     // Start all oscillators
     for (let i = 0; i < 4; i++) {
@@ -154,10 +189,13 @@ export class FMSynth {
       this.lfo.stop(oscStopTime);
     }
 
-    // Cleanup after release time
+    // Auto cleanup after full duration (ADSR complete)
     setTimeout(() => {
-      this.cleanup();
-    }, (duration + fixedRelease) * 1000 + 100);
+      if (this.isPlaying && !this.releaseScheduled) {
+        this.cleanup();
+        this.isPlaying = false;
+      }
+    }, (duration + maxRelease) * 1000 + 100);
   }
 
   private connectAlgorithm(

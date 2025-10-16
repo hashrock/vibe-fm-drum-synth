@@ -12,6 +12,8 @@ interface TrackData {
   algorithm: FMAlgorithm;
   pitchEnvelope: PitchEnvelopeParams;
   pitchMap: number[];
+  noteLength: number; // Length in steps (1.0 = one step)
+  activeSynth: FMSynth | null;
 }
 
 export const Sequencer = () => {
@@ -35,10 +37,10 @@ export const Sequencer = () => {
     audioContextRef.current = new AudioContext();
 
     const defaultOperators: OperatorParams[] = [
-      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, decay: 0.3, feedbackAmount: 0 },
-      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, decay: 0.25, feedbackAmount: 0 },
-      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, decay: 0.2, feedbackAmount: 0 },
-      { frequency: 440, ratio: 8, level: 0.7, attack: 0.001, decay: 0.4, feedbackAmount: 0 },
+      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, decay: 0.1, sustain: 0.3, release: 0.1, feedbackAmount: 0 },
+      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, decay: 0.08, sustain: 0.2, release: 0.08, feedbackAmount: 0 },
+      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, decay: 0.05, sustain: 0.1, release: 0.05, feedbackAmount: 0 },
+      { frequency: 440, ratio: 8, level: 0.7, attack: 0.001, decay: 0.12, sustain: 0.4, release: 0.12, feedbackAmount: 0 },
     ];
 
     const initialTracks: TrackData[] = [
@@ -48,15 +50,17 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 55,
         operators: [
-          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.3, feedbackAmount: 0.3 },
-          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, decay: 0.25, feedbackAmount: 0.2 },
-          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, decay: 0.2, feedbackAmount: 0 },
-          { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, decay: 0.4, feedbackAmount: 0 },
+          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.1, sustain: 0.0, release: 0.2, feedbackAmount: 0.3 },
+          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.15, feedbackAmount: 0.2 },
+          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, decay: 0.05, sustain: 0.0, release: 0.1, feedbackAmount: 0 },
+          { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.15, feedbackAmount: 0 },
         ],
         lfo: { frequency: 0, depth: 0 },
         algorithm: 'serial' as FMAlgorithm,
         pitchEnvelope: { attack: 0.01, decay: 0.05, depth: 0.5 },
         pitchMap: new Array(64).fill(1),
+        noteLength: 1.0,
+        activeSynth: null,
       },
       {
         id: 1,
@@ -64,15 +68,17 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 200,
         operators: [
-          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.2, feedbackAmount: 0.5 },
-          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, decay: 0.18, feedbackAmount: 0.4 },
-          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, decay: 0.15, feedbackAmount: 0.3 },
-          { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, decay: 0.25, feedbackAmount: 0.2 },
+          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.5 },
+          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, decay: 0.06, sustain: 0.05, release: 0.12, feedbackAmount: 0.4 },
+          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.08, feedbackAmount: 0.3 },
+          { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.2 },
         ],
         lfo: { frequency: 10, depth: 0.05 },
         algorithm: 'serial' as FMAlgorithm,
         pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
         pitchMap: new Array(64).fill(1),
+        noteLength: 1.0,
+        activeSynth: null,
       },
       {
         id: 2,
@@ -80,15 +86,17 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 800,
         operators: [
-          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.1, feedbackAmount: 0.7 },
-          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, decay: 0.08, feedbackAmount: 0.6 },
-          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, decay: 0.06, feedbackAmount: 0.5 },
-          { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, decay: 0.12, feedbackAmount: 0.4 },
+          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.7 },
+          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, decay: 0.015, sustain: 0.0, release: 0.04, feedbackAmount: 0.6 },
+          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, decay: 0.01, sustain: 0.0, release: 0.03, feedbackAmount: 0.5 },
+          { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.4 },
         ],
         lfo: { frequency: 20, depth: 0.1 },
         algorithm: 'parallel' as FMAlgorithm,
         pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
         pitchMap: new Array(64).fill(1),
+        noteLength: 0.5,
+        activeSynth: null,
       },
       {
         id: 3,
@@ -96,15 +104,17 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 110,
         operators: [
-          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, decay: 0.3, feedbackAmount: 0.2 },
-          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, decay: 0.25, feedbackAmount: 0.1 },
-          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, decay: 0.2, feedbackAmount: 0.05 },
-          { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, decay: 0.35, feedbackAmount: 0 },
+          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, decay: 0.15, sustain: 0.2, release: 0.2, feedbackAmount: 0.2 },
+          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.15, feedbackAmount: 0.1 },
+          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.1, feedbackAmount: 0.05 },
+          { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, decay: 0.15, sustain: 0.2, release: 0.2, feedbackAmount: 0 },
         ],
         lfo: { frequency: 5, depth: 0.03 },
         algorithm: 'hybrid1' as FMAlgorithm,
         pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
         pitchMap: new Array(64).fill(1),
+        noteLength: 2.0,
+        activeSynth: null,
       },
     ];
 
@@ -132,19 +142,18 @@ export const Sequencer = () => {
           // Trigger sounds for active steps using latest tracks from ref
           tracksRef.current.forEach(track => {
             if (track.steps[currentStepToPlay]) {
+              // Stop previous note if playing (monophonic behavior)
+              if (track.activeSynth) {
+                track.activeSynth.noteOff();
+              }
+
+              // Create new synth for this track
               const synth = new FMSynth(audioContextRef.current!);
               const pitchMultiplier = track.pitchMap[currentStepToPlay] || 1;
               const adjustedFrequency = track.frequency * pitchMultiplier;
 
-              // Calculate duration until next note (or use step duration if no next note)
-              let noteDuration = stepDuration / 1000;
-              for (let i = 1; i < stepCount; i++) {
-                const nextStepIndex = (currentStepToPlay + i) % stepCount;
-                if (track.steps[nextStepIndex]) {
-                  noteDuration = (stepDuration * i) / 1000;
-                  break;
-                }
-              }
+              // Use note length setting (in steps)
+              const noteDuration = (stepDuration * track.noteLength) / 1000;
 
               synth.trigger(
                 adjustedFrequency,
@@ -154,6 +163,9 @@ export const Sequencer = () => {
                 track.algorithm,
                 track.pitchEnvelope
               );
+
+              // Store synth reference for monophonic behavior
+              track.activeSynth = synth;
             }
           });
 
@@ -248,6 +260,14 @@ export const Sequencer = () => {
     );
   };
 
+  const updateNoteLength = (trackId: number, noteLength: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, noteLength } : track
+      )
+    );
+  };
+
   const randomizeTrack = (trackId: number) => {
     setTracks(prev =>
       prev.map(track => {
@@ -258,7 +278,9 @@ export const Sequencer = () => {
           ratio: Math.random() * 15 + 0.1,
           level: Math.random() * 0.8 + 0.2,
           attack: 0.001, // Always fast attack
-          decay: Math.random() * 0.8 + 0.1,
+          decay: Math.random() * 0.3 + 0.05,
+          sustain: Math.random() * 0.5,
+          release: Math.random() * 0.3 + 0.05,
           feedbackAmount: Math.random() * 0.8,
         }));
 
@@ -498,7 +520,9 @@ export const Sequencer = () => {
                   { key: 'ratio', label: 'rat', min: 0.1, max: 16 },
                   { key: 'level', label: 'lev', min: 0, max: 1 },
                   { key: 'attack', label: 'att', min: 0, max: 0.1 },
-                  { key: 'decay', label: 'dec', min: 0, max: 2 },
+                  { key: 'decay', label: 'dec', min: 0, max: 1 },
+                  { key: 'sustain', label: 'sus', min: 0, max: 1 },
+                  { key: 'release', label: 'rel', min: 0, max: 1 },
                   { key: 'feedbackAmount', label: 'fb', min: 0, max: 1 }
                 ].map(({ key, label, min, max }) => (
                   <div key={key} style={{ marginBottom: '2px', fontSize: '9px' }}>
@@ -524,7 +548,19 @@ export const Sequencer = () => {
           </div>
 
           {/* Compact Global Controls */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px', fontSize: '9px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '5px', fontSize: '9px' }}>
+            <div>
+              <div>Note L: {track.noteLength.toFixed(1)}</div>
+              <input
+                type="range"
+                min={0.1}
+                max={8}
+                step={0.1}
+                value={track.noteLength}
+                onChange={e => updateNoteLength(track.id, Number(e.target.value))}
+                style={{ width: '100%', height: '8px' }}
+              />
+            </div>
             <div>
               <div>LFO F: {track.lfo.frequency.toFixed(1)}</div>
               <input

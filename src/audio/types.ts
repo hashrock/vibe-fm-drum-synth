@@ -4,6 +4,8 @@ export interface OperatorParams {
   level: number;
   attack: number;
   decay: number;
+  sustain: number;
+  release: number;
   feedbackAmount: number;
 }
 
