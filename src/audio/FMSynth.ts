@@ -245,9 +245,9 @@ export class FMSynth {
 
       this.lfo.connect(this.lfoGain);
 
-      // Apply LFO to all operators
+      // Apply LFO to all operators (only oscillators, not noise)
       this.operators.forEach(osc => {
-        if (this.lfoGain) {
+        if (this.lfoGain && osc instanceof OscillatorNode) {
           this.lfoGain.connect(osc.frequency);
         }
       });
@@ -276,7 +276,7 @@ export class FMSynth {
       case 'serial':
         // 0->1->2->3->output (serial chain)
         for (let i = 0; i < 4; i++) {
-          if (i < 3) {
+          if (i < 3 && operators[i + 1] instanceof OscillatorNode) {
             const modGain = this.audioContext.createGain();
             modGain.gain.value = operatorParams[i].level * (1000 - i * 200);
             gains[i].connect(modGain);
@@ -296,15 +296,23 @@ export class FMSynth {
 
       case 'hybrid1': {
         // 0->1, 2->3, both to output
-        const modGain0 = this.audioContext.createGain();
-        modGain0.gain.value = operatorParams[0].level * 1000;
-        gains[0].connect(modGain0);
-        modGain0.connect(operators[1].frequency);
+        if (operators[1] instanceof OscillatorNode) {
+          const modGain0 = this.audioContext.createGain();
+          modGain0.gain.value = operatorParams[0].level * 1000;
+          gains[0].connect(modGain0);
+          modGain0.connect(operators[1].frequency);
+        } else {
+          gains[0].connect(this.masterGain);
+        }
 
-        const modGain2 = this.audioContext.createGain();
-        modGain2.gain.value = operatorParams[2].level * 1000;
-        gains[2].connect(modGain2);
-        modGain2.connect(operators[3].frequency);
+        if (operators[3] instanceof OscillatorNode) {
+          const modGain2 = this.audioContext.createGain();
+          modGain2.gain.value = operatorParams[2].level * 1000;
+          gains[2].connect(modGain2);
+          modGain2.connect(operators[3].frequency);
+        } else {
+          gains[2].connect(this.masterGain);
+        }
 
         gains[1].connect(this.masterGain);
         gains[3].connect(this.masterGain);
@@ -313,15 +321,23 @@ export class FMSynth {
 
       case 'hybrid2': {
         // 0->1->2, 3 separate, both to output
-        const modGain0h2 = this.audioContext.createGain();
-        modGain0h2.gain.value = operatorParams[0].level * 1000;
-        gains[0].connect(modGain0h2);
-        modGain0h2.connect(operators[1].frequency);
+        if (operators[1] instanceof OscillatorNode) {
+          const modGain0h2 = this.audioContext.createGain();
+          modGain0h2.gain.value = operatorParams[0].level * 1000;
+          gains[0].connect(modGain0h2);
+          modGain0h2.connect(operators[1].frequency);
+        } else {
+          gains[0].connect(this.masterGain);
+        }
 
-        const modGain1h2 = this.audioContext.createGain();
-        modGain1h2.gain.value = operatorParams[1].level * 800;
-        gains[1].connect(modGain1h2);
-        modGain1h2.connect(operators[2].frequency);
+        if (operators[2] instanceof OscillatorNode) {
+          const modGain1h2 = this.audioContext.createGain();
+          modGain1h2.gain.value = operatorParams[1].level * 800;
+          gains[1].connect(modGain1h2);
+          modGain1h2.connect(operators[2].frequency);
+        } else {
+          gains[1].connect(this.masterGain);
+        }
 
         gains[2].connect(this.masterGain);
         gains[3].connect(this.masterGain);
