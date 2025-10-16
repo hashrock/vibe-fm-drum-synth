@@ -233,6 +233,22 @@ export const Sequencer = () => {
     };
   }, []);
 
+  // Spacebar to toggle play/stop
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger if not focused on an input element
+      if (e.code === 'Space' && e.target instanceof HTMLElement &&
+          e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' &&
+          e.target.tagName !== 'SELECT' && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        setIsPlaying(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Ducking helper function
   const triggerDucking = () => {
     const currentTime = audioContextRef.current?.currentTime || 0;
