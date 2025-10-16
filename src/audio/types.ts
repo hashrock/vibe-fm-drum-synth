@@ -3,8 +3,6 @@ export interface OperatorParams {
   ratio: number;
   level: number;
   attack: number;
-  decay: number;
-  sustain: number;
   release: number;
   feedbackAmount: number;
 }

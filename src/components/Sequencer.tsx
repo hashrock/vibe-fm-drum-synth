@@ -35,10 +35,10 @@ export const Sequencer = () => {
     audioContextRef.current = new AudioContext();
 
     const defaultOperators: OperatorParams[] = [
-      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, decay: 0.05, sustain: 0.3, release: 0.1, feedbackAmount: 0 },
-      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, decay: 0.03, sustain: 0.2, release: 0.08, feedbackAmount: 0 },
-      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, decay: 0.02, sustain: 0.1, release: 0.05, feedbackAmount: 0 },
-      { frequency: 440, ratio: 8, level: 0.1, attack: 0.001, decay: 0.01, sustain: 0.05, release: 0.03, feedbackAmount: 0 },
+      { frequency: 440, ratio: 1, level: 0.5, attack: 0.001, release: 0.1, feedbackAmount: 0 },
+      { frequency: 440, ratio: 2, level: 0.3, attack: 0.001, release: 0.08, feedbackAmount: 0 },
+      { frequency: 440, ratio: 4, level: 0.2, attack: 0.001, release: 0.05, feedbackAmount: 0 },
+      { frequency: 440, ratio: 8, level: 0.7, attack: 0.001, release: 0.15, feedbackAmount: 0 },
     ];
 
     const initialTracks: TrackData[] = [
@@ -48,10 +48,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 55,
         operators: [
-          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.1, sustain: 0.0, release: 0.2, feedbackAmount: 0.3 },
-          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.15, feedbackAmount: 0.2 },
-          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, decay: 0.05, sustain: 0.0, release: 0.1, feedbackAmount: 0 },
-          { frequency: 55, ratio: 0.1, level: 0.1, attack: 0.001, decay: 0.03, sustain: 0.0, release: 0.05, feedbackAmount: 0 },
+          { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, release: 0.2, feedbackAmount: 0.3 },
+          { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, release: 0.15, feedbackAmount: 0.2 },
+          { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, release: 0.1, feedbackAmount: 0 },
+          { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, release: 0.25, feedbackAmount: 0 },
         ],
         lfo: { frequency: 0, depth: 0 },
         algorithm: 'serial' as FMAlgorithm,
@@ -64,10 +64,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 200,
         operators: [
-          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.5 },
-          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, decay: 0.06, sustain: 0.05, release: 0.12, feedbackAmount: 0.4 },
-          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.08, feedbackAmount: 0.3 },
-          { frequency: 200, ratio: 5.1, level: 0.2, attack: 0.001, decay: 0.03, sustain: 0.01, release: 0.05, feedbackAmount: 0.2 },
+          { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, release: 0.15, feedbackAmount: 0.5 },
+          { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, release: 0.12, feedbackAmount: 0.4 },
+          { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, release: 0.08, feedbackAmount: 0.3 },
+          { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, release: 0.2, feedbackAmount: 0.2 },
         ],
         lfo: { frequency: 10, depth: 0.05 },
         algorithm: 'serial' as FMAlgorithm,
@@ -80,10 +80,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 800,
         operators: [
-          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.7 },
-          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, decay: 0.015, sustain: 0.0, release: 0.04, feedbackAmount: 0.6 },
-          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, decay: 0.01, sustain: 0.0, release: 0.03, feedbackAmount: 0.5 },
-          { frequency: 800, ratio: 6.2, level: 0.1, attack: 0.001, decay: 0.008, sustain: 0.0, release: 0.02, feedbackAmount: 0.4 },
+          { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, release: 0.05, feedbackAmount: 0.7 },
+          { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, release: 0.04, feedbackAmount: 0.6 },
+          { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, release: 0.03, feedbackAmount: 0.5 },
+          { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, release: 0.08, feedbackAmount: 0.4 },
         ],
         lfo: { frequency: 20, depth: 0.1 },
         algorithm: 'parallel' as FMAlgorithm,
@@ -96,10 +96,10 @@ export const Sequencer = () => {
         steps: new Array(64).fill(false),
         frequency: 110,
         operators: [
-          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, decay: 0.15, sustain: 0.2, release: 0.2, feedbackAmount: 0.2 },
-          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.15, feedbackAmount: 0.1 },
-          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.1, feedbackAmount: 0.05 },
-          { frequency: 110, ratio: 3.2, level: 0.2, attack: 0.001, decay: 0.08, sustain: 0.05, release: 0.08, feedbackAmount: 0 },
+          { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, release: 0.2, feedbackAmount: 0.2 },
+          { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, release: 0.15, feedbackAmount: 0.1 },
+          { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, release: 0.1, feedbackAmount: 0.05 },
+          { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, release: 0.25, feedbackAmount: 0 },
         ],
         lfo: { frequency: 5, depth: 0.03 },
         algorithm: 'hybrid1' as FMAlgorithm,
@@ -237,6 +237,37 @@ export const Sequencer = () => {
     );
   };
 
+  const randomizeTrack = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track => {
+        if (track.id !== trackId) return track;
+
+        const randomOperators = track.operators.map(op => ({
+          ...op,
+          ratio: Math.random() * 15 + 0.1,
+          level: Math.random() * 0.8 + 0.2,
+          attack: 0.001, // Always fast attack
+          release: Math.random() * 0.3 + 0.05,
+          feedbackAmount: Math.random() * 0.8,
+        }));
+
+        return {
+          ...track,
+          operators: randomOperators,
+          lfo: {
+            frequency: Math.random() * 40,
+            depth: Math.random() * 0.3,
+          },
+          pitchEnvelope: {
+            attack: Math.random() * 0.05,
+            decay: Math.random() * 0.2 + 0.05,
+            depth: Math.random() * 1.5,
+          },
+        };
+      })
+    );
+  };
+
   const [dragStepInfo, setDragStepInfo] = useState<{ trackId: number; stepIndex: number } | null>(null);
 
   const handleStepMouseDown = (trackId: number, stepIndex: number, e: React.MouseEvent) => {
@@ -353,24 +384,41 @@ export const Sequencer = () => {
             borderRadius: '3px',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 style={{ margin: 0, fontSize: '13px' }}>{track.name}</h3>
-            <select
-              value={track.algorithm}
-              onChange={e => updateAlgorithm(track.id, e.target.value as FMAlgorithm)}
-              style={{
-                background: '#1a1a1a',
-                color: '#00ff00',
-                border: '1px solid #00ff00',
-                padding: '2px 5px',
-                fontSize: '10px',
-              }}
-            >
-              <option value="serial">Serial</option>
-              <option value="parallel">Parallel</option>
-              <option value="hybrid1">Hybrid1</option>
-              <option value="hybrid2">Hybrid2</option>
-            </select>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <button
+                onClick={() => randomizeTrack(track.id)}
+                style={{
+                  background: '#ff8800',
+                  color: '#1a1a1a',
+                  border: 'none',
+                  padding: '2px 8px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                }}
+              >
+                RAND
+              </button>
+              <select
+                value={track.algorithm}
+                onChange={e => updateAlgorithm(track.id, e.target.value as FMAlgorithm)}
+                style={{
+                  background: '#1a1a1a',
+                  color: '#00ff00',
+                  border: '1px solid #00ff00',
+                  padding: '2px 5px',
+                  fontSize: '10px',
+                }}
+              >
+                <option value="serial">Serial</option>
+                <option value="parallel">Parallel</option>
+                <option value="hybrid1">Hybrid1</option>
+                <option value="hybrid2">Hybrid2</option>
+              </select>
+            </div>
           </div>
 
           {/* Step Sequencer with Pitch Control */}
@@ -436,15 +484,15 @@ export const Sequencer = () => {
                 </div>
 
                 {[
-                  { key: 'ratio', min: 0.1, max: 16 },
-                  { key: 'level', min: 0, max: 1 },
-                  { key: 'attack', min: 0, max: 1 },
-                  { key: 'decay', min: 0, max: 1 },
-                  { key: 'feedbackAmount', min: 0, max: 1 }
-                ].map(({ key, min, max }) => (
+                  { key: 'ratio', label: 'rat', min: 0.1, max: 16 },
+                  { key: 'level', label: 'lev', min: 0, max: 1 },
+                  { key: 'attack', label: 'att', min: 0, max: 0.1 },
+                  { key: 'release', label: 'rel', min: 0, max: 1 },
+                  { key: 'feedbackAmount', label: 'fb', min: 0, max: 1 }
+                ].map(({ key, label, min, max }) => (
                   <div key={key} style={{ marginBottom: '2px', fontSize: '9px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{key.substring(0, 3)}</span>
+                      <span>{label}</span>
                       <span>{op[key as keyof OperatorParams].toFixed(2)}</span>
                     </div>
                     <input
@@ -483,7 +531,7 @@ export const Sequencer = () => {
               <input
                 type="range"
                 min={0}
-                max={1}
+                max={4}
                 step={0.01}
                 value={track.lfo.depth}
                 onChange={e => updateLFO(track.id, 'depth', Number(e.target.value))}

@@ -91,16 +91,16 @@ export class FMSynth {
       this.feedbackNodes.push(feedbackDelay);
       this.feedbackGains.push(feedbackGain);
 
-      // ADSR Envelope
+      // AR Envelope with fixed decay and sustain
       const attack = params.attack;
-      const decay = params.decay;
-      const sustain = params.sustain;
+      const decay = 0.3; // Fixed longer decay
+      const sustain = 0.5; // Fixed sustain level
       const release = params.release;
 
       // Ensure times are valid and non-negative
       const attackTime = Math.max(0, attack);
       const decayTime = Math.max(0, decay);
-      const releaseTime = Math.max(0, Math.min(release, duration * 0.9)); // Release can't be longer than 90% of duration
+      const releaseTime = Math.max(0, Math.min(release, duration * 0.9));
       const sustainStart = attackTime + decayTime;
       const releaseStart = Math.max(sustainStart, duration - releaseTime);
 
