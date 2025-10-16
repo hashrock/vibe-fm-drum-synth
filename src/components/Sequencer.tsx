@@ -22,6 +22,7 @@ interface TrackData {
   duckingGain: GainNode | null; // For tracks 2,3,4 to receive ducking signal
   duckingAmount: number; // How much to reduce volume (0-1, 0 = mute, 1 = no change)
   duckingRelease: number; // How fast to return to normal (seconds)
+  isMuted: boolean; // Mute channel
 }
 
 export const Sequencer = () => {
@@ -30,6 +31,7 @@ export const Sequencer = () => {
   const [stepCount, setStepCount] = useState(16);
   const [currentStep, setCurrentStep] = useState(0);
   const [tracks, setTracks] = useState<TrackData[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -39,6 +41,34 @@ export const Sequencer = () => {
   useEffect(() => {
     tracksRef.current = tracks;
   }, [tracks]);
+
+  // Toast auto-hide
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    if (tracks.length > 0) {
+      try {
+        const tracksToSave = tracks.map(track => ({
+          ...track,
+          activeSynth: null,
+          duckingGain: null,
+        }));
+        localStorage.setItem('fmsynth-tracks', JSON.stringify(tracksToSave));
+      } catch (e) {
+        console.error('Failed to save tracks:', e);
+      }
+    }
+  }, [tracks]);
+
+  const showToast = (message: string) => {
+    setToast(message);
+  };
 
   // Initialize audio context and tracks
   useEffect(() => {
@@ -67,7 +97,7 @@ export const Sequencer = () => {
       {
         id: 0,
         name: 'Kick',
-        steps: new Array(64).fill(false),
+        steps: new Array(64).fill(false).map((_, i) => i % 4 === 0 && i < 16),
         frequency: 55,
         operators: [
           { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.1, sustain: 0.0, release: 0.2, feedbackAmount: 0.3 },
@@ -89,11 +119,12 @@ export const Sequencer = () => {
         duckingGain: duckingGains[0],
         duckingAmount: 0.3, // Duck to 30%
         duckingRelease: 0.2, // 200ms release
+        isMuted: false,
       },
       {
         id: 1,
         name: 'Snare',
-        steps: new Array(64).fill(false),
+        steps: new Array(64).fill(false).map((_, i) => (i === 4 || i === 12) && i < 16),
         frequency: 200,
         operators: [
           { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.5 },
@@ -115,11 +146,12 @@ export const Sequencer = () => {
         duckingGain: duckingGains[1],
         duckingAmount: 0.3,
         duckingRelease: 0.2,
+        isMuted: false,
       },
       {
         id: 2,
         name: 'HiHat',
-        steps: new Array(64).fill(false),
+        steps: new Array(64).fill(false).map((_, i) => i % 2 === 0 && i < 16),
         frequency: 800,
         operators: [
           { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.7 },
@@ -141,6 +173,7 @@ export const Sequencer = () => {
         duckingGain: duckingGains[2],
         duckingAmount: 0.3,
         duckingRelease: 0.2,
+        isMuted: false,
       },
       {
         id: 3,
@@ -167,10 +200,28 @@ export const Sequencer = () => {
         duckingGain: duckingGains[3],
         duckingAmount: 0.3,
         duckingRelease: 0.2,
+        isMuted: false,
       },
     ];
 
-    setTracks(initialTracks);
+    // Load from localStorage or use initial tracks
+    try {
+      const savedData = localStorage.getItem('fmsynth-tracks');
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        const restoredTracks = parsed.map((track: TrackData, index: number) => ({
+          ...track,
+          activeSynth: trackSynths[index],
+          duckingGain: index > 0 ? duckingGains[index] : null,
+        }));
+        setTracks(restoredTracks);
+      } else {
+        setTracks(initialTracks);
+      }
+    } catch (e) {
+      console.error('Failed to load saved tracks:', e);
+      setTracks(initialTracks);
+    }
 
     return () => {
       if (intervalRef.current) {
@@ -213,7 +264,7 @@ export const Sequencer = () => {
 
           // Trigger sounds for active steps using latest tracks from ref
           tracksRef.current.forEach(track => {
-            if (track.steps[currentStepToPlay] && track.activeSynth) {
+            if (track.steps[currentStepToPlay] && track.activeSynth && !track.isMuted) {
               const pitchMultiplier = track.pitchEnabled ? (track.pitchMap[currentStepToPlay] || 1) : 1;
               const adjustedFrequency = track.frequency * pitchMultiplier;
 
@@ -380,6 +431,85 @@ export const Sequencer = () => {
         track.id === trackId ? { ...track, pitchLocked: !track.pitchLocked } : track
       )
     );
+  };
+
+  const toggleMute = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, isMuted: !track.isMuted } : track
+      )
+    );
+  };
+
+  const copyTrackParams = (trackId: number) => {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+
+    const params = {
+      operators: track.operators,
+      lfo: track.lfo,
+      algorithm: track.algorithm,
+      pitchEnvelope: track.pitchEnvelope,
+      noteLength: track.noteLength,
+      frequency: track.frequency,
+    };
+
+    const json = JSON.stringify(params, null, 2);
+    navigator.clipboard.writeText(json).then(() => {
+      showToast('音色パラメータをコピーしました！');
+    });
+  };
+
+  const pasteTrackParams = (trackId: number) => {
+    navigator.clipboard.readText().then(text => {
+      try {
+        const params = JSON.parse(text);
+        setTracks(prev =>
+          prev.map(track => {
+            if (track.id !== trackId) return track;
+            return {
+              ...track,
+              operators: params.operators || track.operators,
+              lfo: params.lfo || track.lfo,
+              algorithm: params.algorithm || track.algorithm,
+              pitchEnvelope: params.pitchEnvelope || track.pitchEnvelope,
+              noteLength: params.noteLength || track.noteLength,
+              frequency: params.frequency || track.frequency,
+            };
+          })
+        );
+        showToast('音色パラメータをペーストしました！');
+      } catch (_e) {
+        showToast('無効なパラメータです');
+      }
+    });
+  };
+
+  const resetToInitialSequence = () => {
+    setTracks(prev =>
+      prev.map((track, index) => {
+        let initialSteps: boolean[];
+        // Set initial patterns based on track ID
+        if (index === 0) {
+          // Kick: 4 on the floor (0, 4, 8, 12)
+          initialSteps = new Array(64).fill(false).map((_, i) => i % 4 === 0 && i < 16);
+        } else if (index === 1) {
+          // Snare: Backbeat (4, 12)
+          initialSteps = new Array(64).fill(false).map((_, i) => (i === 4 || i === 12) && i < 16);
+        } else if (index === 2) {
+          // HiHat: 8th notes (0, 2, 4, 6, 8, 10, 12, 14)
+          initialSteps = new Array(64).fill(false).map((_, i) => i % 2 === 0 && i < 16);
+        } else {
+          // Tom: Empty
+          initialSteps = new Array(64).fill(false);
+        }
+        return {
+          ...track,
+          steps: initialSteps,
+        };
+      })
+    );
+    showToast('初期シーケンスをロードしました！');
   };
 
   const updateDuckingAmount = (trackId: number, amount: number) => {
@@ -552,6 +682,22 @@ export const Sequencer = () => {
           >
             CLEAR
           </button>
+
+          <button
+            onClick={resetToInitialSequence}
+            style={{
+              background: '#4a4a4a',
+              color: '#e0e0e0',
+              border: '1px solid #5a5a5a',
+              padding: '10px 24px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              borderRadius: '4px',
+            }}
+          >
+            RESET
+          </button>
         </div>
       </div>
 
@@ -571,18 +717,19 @@ export const Sequencer = () => {
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '500' }}>{track.name}</h3>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
-                onClick={() => toggleExpanded(track.id)}
+                onClick={() => toggleMute(track.id)}
                 style={{
-                  background: '#4a4a4a',
+                  background: track.isMuted ? '#d32f2f' : '#4a4a4a',
                   color: '#e0e0e0',
                   border: '1px solid #5a5a5a',
-                  padding: '6px 12px',
-                  fontSize: '13px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
                   cursor: 'pointer',
                   borderRadius: '4px',
+                  fontWeight: '500',
                 }}
               >
-                {track.isExpanded ? '−' : '+'}
+                {track.isMuted ? 'MUTED' : 'M'}
               </button>
               <button
                 onClick={() => randomizeTrack(track.id)}
@@ -611,6 +758,34 @@ export const Sequencer = () => {
                 }}
               >
                 RAND SEQ
+              </button>
+              <button
+                onClick={() => copyTrackParams(track.id)}
+                style={{
+                  background: '#4a4a4a',
+                  color: '#e0e0e0',
+                  border: '1px solid #5a5a5a',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                }}
+              >
+                COPY
+              </button>
+              <button
+                onClick={() => pasteTrackParams(track.id)}
+                style={{
+                  background: '#4a4a4a',
+                  color: '#e0e0e0',
+                  border: '1px solid #5a5a5a',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                }}
+              >
+                PASTE
               </button>
               <select
                 value={track.algorithm}
@@ -838,6 +1013,29 @@ export const Sequencer = () => {
             </div>
           )}
 
+          {/* Operators Toggle */}
+          <div style={{ marginTop: '12px' }}>
+            <button
+              onClick={() => toggleExpanded(track.id)}
+              style={{
+                width: '100%',
+                background: '#3a3a3a',
+                color: '#e0e0e0',
+                border: '1px solid #4a4a4a',
+                padding: '8px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span>Operators & Advanced</span>
+              <span>{track.isExpanded ? '▲' : '▼'}</span>
+            </button>
+          </div>
+
           {/* Operators - Collapsible */}
           {track.isExpanded && (
             <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
@@ -882,6 +1080,28 @@ export const Sequencer = () => {
           )}
         </div>
       ))}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#323232',
+            color: '#e0e0e0',
+            padding: '12px 24px',
+            borderRadius: '4px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+            zIndex: 1000,
+            fontSize: '14px',
+            fontWeight: '500',
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 };
