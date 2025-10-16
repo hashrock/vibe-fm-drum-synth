@@ -1,18 +1,6 @@
-export interface OperatorParams {
-  frequency: number;
-  ratio: number;
-  level: number;
-  attack: number;
-  decay: number;
-  sustain: number;
-  release: number;
-  feedbackAmount: number;
-}
+import type { OperatorParams, LFOParams } from './types';
 
-export interface LFOParams {
-  frequency: number;
-  depth: number;
-}
+export type { OperatorParams, LFOParams } from './types';
 
 export class FMSynth {
   private audioContext: AudioContext;
@@ -40,7 +28,12 @@ export class FMSynth {
   ) {
     const currentTime = this.audioContext.currentTime;
 
-    // Create 4 operators
+    const tempOperators: OscillatorNode[] = [];
+    const tempGains: GainNode[] = [];
+    const tempEnvGains: GainNode[] = [];
+    const modGains: GainNode[] = [];
+
+    // Create all 4 operators first
     for (let i = 0; i < 4; i++) {
       const params = operatorParams[i];
 
@@ -72,35 +65,9 @@ export class FMSynth {
       feedbackDelay.connect(envGain);
       envGain.connect(opGain);
 
-      // FM routing: 0->1->2->3->output
-      if (i === 0) {
-        // Operator 0 modulates Operator 1
-        if (i + 1 < 4) {
-          const modGain = this.audioContext.createGain();
-          modGain.gain.value = params.level * 1000;
-          opGain.connect(modGain);
-          modGain.connect(this.operators[i + 1]?.frequency || envGain);
-        }
-      } else if (i === 1) {
-        // Operator 1 modulates Operator 2
-        if (i + 1 < 4) {
-          const modGain = this.audioContext.createGain();
-          modGain.gain.value = params.level * 800;
-          opGain.connect(modGain);
-          modGain.connect(this.operators[i + 1]?.frequency || envGain);
-        }
-      } else if (i === 2) {
-        // Operator 2 modulates Operator 3
-        if (i + 1 < 4) {
-          const modGain = this.audioContext.createGain();
-          modGain.gain.value = params.level * 600;
-          opGain.connect(modGain);
-          modGain.connect(this.operators[i + 1]?.frequency || envGain);
-        }
-      } else {
-        // Operator 3 goes to output
-        opGain.connect(this.masterGain);
-      }
+      tempOperators.push(osc);
+      tempGains.push(opGain);
+      tempEnvGains.push(envGain);
 
       this.operators.push(osc);
       this.gains.push(opGain);
@@ -114,14 +81,41 @@ export class FMSynth {
       const sustain = params.sustain;
       const release = params.release;
 
-      envGain.gain.setValueAtTime(0, currentTime);
-      envGain.gain.linearRampToValueAtTime(1, currentTime + attack);
-      envGain.gain.linearRampToValueAtTime(sustain, currentTime + attack + decay);
-      envGain.gain.setValueAtTime(sustain, currentTime + duration - release);
-      envGain.gain.linearRampToValueAtTime(0, currentTime + duration);
+      // Ensure times are valid and non-negative
+      const attackTime = Math.max(0, attack);
+      const decayTime = Math.max(0, decay);
+      const releaseTime = Math.max(0, Math.min(release, duration * 0.9)); // Release can't be longer than 90% of duration
+      const sustainStart = attackTime + decayTime;
+      const releaseStart = Math.max(sustainStart, duration - releaseTime);
 
-      osc.start(currentTime);
-      osc.stop(currentTime + duration);
+      envGain.gain.setValueAtTime(0, currentTime);
+      envGain.gain.linearRampToValueAtTime(1, currentTime + attackTime);
+      envGain.gain.linearRampToValueAtTime(sustain, currentTime + sustainStart);
+      envGain.gain.setValueAtTime(sustain, currentTime + releaseStart);
+      envGain.gain.linearRampToValueAtTime(0, currentTime + duration);
+    }
+
+    // Now connect FM routing: 0->1->2->3->output
+    for (let i = 0; i < 4; i++) {
+      const params = operatorParams[i];
+
+      if (i < 3) {
+        // Operators 0, 1, 2 modulate the next operator
+        const modGain = this.audioContext.createGain();
+        modGain.gain.value = params.level * (1000 - i * 200); // 1000, 800, 600
+        tempGains[i].connect(modGain);
+        modGain.connect(tempOperators[i + 1].frequency);
+        modGains.push(modGain);
+      } else {
+        // Operator 3 goes to output
+        tempGains[i].connect(this.masterGain);
+      }
+    }
+
+    // Start all oscillators
+    for (let i = 0; i < 4; i++) {
+      tempOperators[i].start(currentTime);
+      tempOperators[i].stop(currentTime + duration);
     }
 
     // LFO
