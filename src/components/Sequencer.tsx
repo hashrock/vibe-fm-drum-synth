@@ -488,28 +488,87 @@ export const Sequencer = () => {
   const resetToInitialSequence = () => {
     setTracks(prev =>
       prev.map((track, index) => {
-        let initialSteps: boolean[];
-        // Set initial patterns based on track ID
+        // Define initial settings for each track
         if (index === 0) {
-          // Kick: 4 on the floor (0, 4, 8, 12)
-          initialSteps = new Array(64).fill(false).map((_, i) => i % 4 === 0 && i < 16);
+          // Kick
+          return {
+            ...track,
+            steps: new Array(64).fill(false).map((_, i) => i % 4 === 0 && i < 16),
+            frequency: 55,
+            operators: [
+              { frequency: 55, ratio: 1, level: 0.8, attack: 0.001, decay: 0.1, sustain: 0.0, release: 0.2, feedbackAmount: 0.3 },
+              { frequency: 55, ratio: 0.5, level: 0.6, attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.15, feedbackAmount: 0.2 },
+              { frequency: 55, ratio: 0.25, level: 0.3, attack: 0.001, decay: 0.05, sustain: 0.0, release: 0.1, feedbackAmount: 0 },
+              { frequency: 55, ratio: 0.1, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.0, release: 0.15, feedbackAmount: 0 },
+            ],
+            lfo: { frequency: 0, depth: 0 },
+            algorithm: 'serial' as FMAlgorithm,
+            pitchEnvelope: { attack: 0.01, decay: 0.05, depth: 0.5 },
+            noteLength: 1.0,
+            lfoEnabled: false,
+            pitchEnabled: true,
+          };
         } else if (index === 1) {
-          // Snare: Backbeat (4, 12)
-          initialSteps = new Array(64).fill(false).map((_, i) => (i === 4 || i === 12) && i < 16);
+          // Snare
+          return {
+            ...track,
+            steps: new Array(64).fill(false).map((_, i) => (i === 4 || i === 12) && i < 16),
+            frequency: 200,
+            operators: [
+              { frequency: 200, ratio: 1.5, level: 0.7, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.5 },
+              { frequency: 200, ratio: 2.3, level: 0.5, attack: 0.001, decay: 0.06, sustain: 0.05, release: 0.12, feedbackAmount: 0.4 },
+              { frequency: 200, ratio: 3.7, level: 0.3, attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.08, feedbackAmount: 0.3 },
+              { frequency: 200, ratio: 5.1, level: 0.8, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.15, feedbackAmount: 0.2 },
+            ],
+            lfo: { frequency: 10, depth: 0.05 },
+            algorithm: 'serial' as FMAlgorithm,
+            pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
+            noteLength: 1.0,
+            lfoEnabled: true,
+            pitchEnabled: true,
+          };
         } else if (index === 2) {
-          // HiHat: 8th notes (0, 2, 4, 6, 8, 10, 12, 14)
-          initialSteps = new Array(64).fill(false).map((_, i) => i % 2 === 0 && i < 16);
+          // HiHat
+          return {
+            ...track,
+            steps: new Array(64).fill(false).map((_, i) => i % 2 === 0 && i < 16),
+            frequency: 800,
+            operators: [
+              { frequency: 800, ratio: 2.1, level: 0.4, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.7 },
+              { frequency: 800, ratio: 3.3, level: 0.3, attack: 0.001, decay: 0.015, sustain: 0.0, release: 0.04, feedbackAmount: 0.6 },
+              { frequency: 800, ratio: 4.7, level: 0.2, attack: 0.001, decay: 0.01, sustain: 0.0, release: 0.03, feedbackAmount: 0.5 },
+              { frequency: 800, ratio: 6.2, level: 0.7, attack: 0.001, decay: 0.02, sustain: 0.0, release: 0.05, feedbackAmount: 0.4 },
+            ],
+            lfo: { frequency: 20, depth: 0.1 },
+            algorithm: 'parallel' as FMAlgorithm,
+            pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
+            noteLength: 0.5,
+            lfoEnabled: true,
+            pitchEnabled: false,
+          };
         } else {
-          // Tom: Empty
-          initialSteps = new Array(64).fill(false);
+          // Tom
+          return {
+            ...track,
+            steps: new Array(64).fill(false),
+            frequency: 110,
+            operators: [
+              { frequency: 110, ratio: 1.2, level: 0.7, attack: 0.001, decay: 0.15, sustain: 0.2, release: 0.2, feedbackAmount: 0.2 },
+              { frequency: 110, ratio: 1.8, level: 0.5, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.15, feedbackAmount: 0.1 },
+              { frequency: 110, ratio: 2.5, level: 0.3, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.1, feedbackAmount: 0.05 },
+              { frequency: 110, ratio: 3.2, level: 0.8, attack: 0.001, decay: 0.15, sustain: 0.2, release: 0.2, feedbackAmount: 0 },
+            ],
+            lfo: { frequency: 5, depth: 0.03 },
+            algorithm: 'hybrid1' as FMAlgorithm,
+            pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
+            noteLength: 2.0,
+            lfoEnabled: true,
+            pitchEnabled: true,
+          };
         }
-        return {
-          ...track,
-          steps: initialSteps,
-        };
       })
     );
-    showToast('初期シーケンスをロードしました！');
+    showToast('初期シーケンスと音色をロードしました！');
   };
 
   const updateDuckingAmount = (trackId: number, amount: number) => {
