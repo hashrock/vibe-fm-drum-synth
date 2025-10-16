@@ -15,6 +15,8 @@ export class FMSynth {
   private isPlaying: boolean = false;
   private releaseScheduled: boolean = false;
   private currentParams: OperatorParams[] = [];
+  private cleanupTimer: number | null = null;
+  private autoStopTimer: number | null = null;
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
@@ -56,15 +58,26 @@ export class FMSynth {
     algorithm: FMAlgorithm = 'serial',
     pitchEnvelope?: PitchEnvelopeParams
   ) {
-    // If already playing, stop current note first (monophonic)
+    const currentTime = this.audioContext.currentTime;
+
+    // Cancel any pending cleanup timers
+    if (this.cleanupTimer !== null) {
+      clearTimeout(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    if (this.autoStopTimer !== null) {
+      clearTimeout(this.autoStopTimer);
+      this.autoStopTimer = null;
+    }
+
+    // If already playing, immediately clean up old notes
     if (this.isPlaying) {
-      this.cleanup();
+      this.cleanupImmediate();
     }
 
     this.isPlaying = true;
     this.releaseScheduled = false;
     this.currentParams = operatorParams;
-    const currentTime = this.audioContext.currentTime;
 
     const tempOperators: OscillatorNode[] = [];
     const tempGains: GainNode[] = [];
@@ -190,7 +203,7 @@ export class FMSynth {
     }
 
     // Auto cleanup after full duration (ADSR complete)
-    setTimeout(() => {
+    this.autoStopTimer = window.setTimeout(() => {
       if (this.isPlaying && !this.releaseScheduled) {
         this.cleanup();
         this.isPlaying = false;
@@ -267,27 +280,62 @@ export class FMSynth {
     }
   }
 
-  private cleanup() {
+  private cleanupImmediate() {
+    // Immediate cleanup without fade (used when new note starts)
     this.operators.forEach(osc => {
       try {
+        osc.stop();
         osc.disconnect();
       } catch (e) {
         // Already disconnected
       }
     });
 
-    this.gains.forEach(gain => gain.disconnect());
-    this.envelopes.forEach(env => env.disconnect());
-    this.feedbackNodes.forEach(fb => fb.disconnect());
-    this.feedbackGains.forEach(fb => fb.disconnect());
+    this.gains.forEach(gain => {
+      try {
+        gain.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+    });
+    this.envelopes.forEach(env => {
+      try {
+        env.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+    });
+    this.feedbackNodes.forEach(fb => {
+      try {
+        fb.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+    });
+    this.feedbackGains.forEach(fb => {
+      try {
+        fb.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+    });
 
     if (this.lfo) {
-      this.lfo.disconnect();
+      try {
+        this.lfo.stop();
+        this.lfo.disconnect();
+      } catch (e) {
+        // Ignore
+      }
       this.lfo = null;
     }
 
     if (this.lfoGain) {
-      this.lfoGain.disconnect();
+      try {
+        this.lfoGain.disconnect();
+      } catch (e) {
+        // Ignore
+      }
       this.lfoGain = null;
     }
 
@@ -296,6 +344,28 @@ export class FMSynth {
     this.envelopes = [];
     this.feedbackNodes = [];
     this.feedbackGains = [];
+  }
+
+  private cleanup() {
+    const currentTime = this.audioContext.currentTime;
+    const fadeTime = 0.005; // 5ms quick fade to avoid clicks
+
+    // Fade out envelopes before disconnecting
+    this.envelopes.forEach(env => {
+      try {
+        env.gain.cancelScheduledValues(currentTime);
+        env.gain.setValueAtTime(env.gain.value, currentTime);
+        env.gain.linearRampToValueAtTime(0, currentTime + fadeTime);
+      } catch (e) {
+        // Ignore if already disconnected
+      }
+    });
+
+    // Schedule disconnection after fade
+    this.cleanupTimer = window.setTimeout(() => {
+      this.cleanupImmediate();
+      this.cleanupTimer = null;
+    }, fadeTime * 1000 + 5);
   }
 
   disconnect() {
