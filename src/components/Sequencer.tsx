@@ -902,58 +902,24 @@ export const Sequencer = () => {
                 {Array.from({ length: Math.min(stepCount, 16) }, (_, i) => {
                   const pitchMult = track.pitchMap[i] || 1;
                   return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                      <div 
-                        style={{ 
-                          position: 'relative',
-                          width: '100%',
-                          height: '60px',
-                          background: '#4a4a4a',
-                          borderRadius: '2px',
-                          border: '1px solid #5a5a5a',
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: `${((pitchMult - 0.5) / 1.5) * 100}%`,
-                            background: track.steps[i] ? '#90caf9' : '#666',
-                            borderRadius: '1px',
-                            opacity: track.pitchLocked ? 0.3 : 1,
-                            transition: 'height 0.1s ease-out',
-                          }}
-                        />
-                      </div>
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                       <input
-                        type="number"
+                        type="range"
                         min={0.5}
                         max={2.0}
                         step={0.1}
-                        value={pitchMult.toFixed(1)}
-                        onChange={e => {
-                          const val = parseFloat(e.target.value);
-                          if (!isNaN(val) && val >= 0.5 && val <= 2.0) {
-                            updatePitchMap(track.id, i, val);
-                          }
-                        }}
+                        value={pitchMult}
+                        onChange={e => updatePitchMap(track.id, i, Number(e.target.value))}
                         disabled={track.pitchLocked}
                         style={{
                           width: '100%',
-                          background: '#4a4a4a',
-                          color: track.steps[i] ? '#90caf9' : '#999',
-                          border: '1px solid #5a5a5a',
-                          padding: '2px 4px',
-                          fontSize: '10px',
-                          borderRadius: '2px',
-                          fontFamily: 'monospace',
-                          textAlign: 'center',
-                          opacity: track.pitchLocked ? 0.3 : 1,
+                          opacity: track.pitchLocked ? 0.3 : (track.steps[i] ? 1 : 0.5),
                         }}
                         title={`Step ${i + 1}: ${pitchMult.toFixed(1)}x`}
                       />
+                      <div style={{ fontSize: '9px', color: track.steps[i] ? '#90caf9' : '#666', fontFamily: 'monospace', height: '12px' }}>
+                        {pitchMult.toFixed(1)}
+                      </div>
                     </div>
                   );
                 })}
