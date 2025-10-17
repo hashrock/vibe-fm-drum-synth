@@ -1037,9 +1037,9 @@ export const Sequencer = () => {
             </div>
           </div>
 
-          {/* ADSR Envelope Controls */}
+          {/* ADSR Envelope Controls - Common controls for all operators */}
           <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>ADSR Envelope</div>
+            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>ADSR Envelope (All Operators)</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Attack</label>
