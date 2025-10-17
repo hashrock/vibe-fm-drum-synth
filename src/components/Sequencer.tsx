@@ -363,6 +363,23 @@ export const Sequencer = () => {
     );
   };
 
+  const updateAllOperatorsADSR = (
+    trackId: number,
+    param: 'attack' | 'decay' | 'sustain' | 'release',
+    value: number
+  ) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId
+          ? {
+              ...track,
+              operators: track.operators.map(op => ({ ...op, [param]: value })),
+            }
+          : track
+      )
+    );
+  };
+
   const updateLFO = (trackId: number, param: keyof LFOParams, value: number) => {
     setTracks(prev =>
       prev.map(track =>
@@ -1016,6 +1033,68 @@ export const Sequencer = () => {
               </label>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '2px', height: '48px', display: 'flex', alignItems: 'center' }}>
                 {track.pitchLocked ? 'Locked' : 'Unlocked'}
+              </div>
+            </div>
+          </div>
+
+          {/* ADSR Envelope Controls */}
+          <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
+            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>ADSR Envelope</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Attack</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.1}
+                  step={0.001}
+                  value={track.operators[0]?.attack ?? 0}
+                  onChange={e => updateAllOperatorsADSR(track.id, 'attack', Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.attack ?? 0).toFixed(3)}s</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Decay</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={track.operators[0]?.decay ?? 0}
+                  onChange={e => updateAllOperatorsADSR(track.id, 'decay', Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.decay ?? 0).toFixed(2)}s</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Sustain</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={track.operators[0]?.sustain ?? 0}
+                  onChange={e => updateAllOperatorsADSR(track.id, 'sustain', Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.sustain ?? 0).toFixed(2)}</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Release</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={track.operators[0]?.release ?? 0}
+                  onChange={e => updateAllOperatorsADSR(track.id, 'release', Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.release ?? 0).toFixed(2)}s</div>
               </div>
             </div>
           </div>
