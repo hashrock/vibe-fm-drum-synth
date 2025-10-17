@@ -652,34 +652,8 @@ export const Sequencer = () => {
     );
   };
 
-  const [dragStepInfo, setDragStepInfo] = useState<{ trackId: number; stepIndex: number } | null>(null);
-
-  const handleStepMouseDown = (trackId: number, stepIndex: number, e: React.MouseEvent) => {
-    if (e.button === 0) {
-      toggleStep(trackId, stepIndex);
-      setDragStepInfo({ trackId, stepIndex });
-    }
-  };
-
-  const handleStepMouseMove = (trackId: number, stepIndex: number, e: React.MouseEvent) => {
-    const track = tracks.find(t => t.id === trackId);
-    if (!track || track.pitchLocked) return; // Don't allow pitch editing if locked
-
-    if (dragStepInfo && dragStepInfo.trackId === trackId && dragStepInfo.stepIndex === stepIndex && e.buttons === 1) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const height = rect.height;
-      const pitchMultiplier = Math.max(0.5, Math.min(2, 2 - (y / height) * 1.5));
-      updatePitchMap(trackId, stepIndex, pitchMultiplier);
-    }
-  };
-
-  const handleMouseUp = () => {
-    setDragStepInfo(null);
-  };
-
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: '#2a2a2a', color: '#e0e0e0', padding: '20px', fontSize: '14px', minHeight: '100vh' }} onMouseUp={handleMouseUp}>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: '#2a2a2a', color: '#e0e0e0', padding: '20px', fontSize: '14px', minHeight: '100vh' }}>
       <h1 style={{ textAlign: 'center', fontSize: '28px', margin: '0 0 24px 0', fontWeight: '300', letterSpacing: '2px' }}>FM SYNTH</h1>
 
       {/* Global Controls */}
@@ -882,50 +856,107 @@ export const Sequencer = () => {
             </div>
           </div>
 
-          {/* Step Sequencer with Pitch Control */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${Math.min(stepCount, 16)}, 1fr)`,
-              gap: '4px',
-              marginBottom: '16px',
-            }}
-          >
-            {track.steps.slice(0, stepCount).map((active, i) => {
-              const pitchMult = track.pitchMap[i] || 1;
-              const heightPercent = Math.min(100, ((pitchMult - 0.5) / 1.5) * 100);
-
-              return (
-                <div
+          {/* Note Sequencer - On/Off buttons */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999' }}>Notes</div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${Math.min(stepCount, 16)}, 1fr)`,
+                gap: '4px',
+              }}
+            >
+              {track.steps.slice(0, stepCount).map((active, i) => (
+                <button
                   key={i}
-                  onMouseDown={(e) => handleStepMouseDown(track.id, i, e)}
-                  onMouseMove={(e) => handleStepMouseMove(track.id, i, e)}
+                  onClick={() => toggleStep(track.id, i)}
                   style={{
-                    position: 'relative',
                     aspectRatio: '1',
-                    background: '#4a4a4a',
+                    background: active ? '#90caf9' : '#4a4a4a',
                     border: i === currentStep && isPlaying ? '2px solid #e0e0e0' : '1px solid #5a5a5a',
                     cursor: 'pointer',
                     borderRadius: '2px',
+                    padding: 0,
                   }}
-                >
-                  {active && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: `${heightPercent}%`,
-                        background: '#90caf9',
-                        borderRadius: '1px',
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
+                />
+              ))}
+            </div>
           </div>
+
+          {/* Pitch Control - Independent input for each step */}
+          {track.pitchEnabled && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Pitch per Step (0.5x - 2.0x)</span>
+                {!track.pitchLocked && (
+                  <span style={{ fontSize: '11px', color: '#777' }}>Adjust pitch for each step</span>
+                )}
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${Math.min(stepCount, 16)}, 1fr)`,
+                  gap: '4px',
+                }}
+              >
+                {track.pitchMap.slice(0, stepCount).map((pitchMult, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <div 
+                      style={{ 
+                        position: 'relative',
+                        width: '100%',
+                        height: '60px',
+                        background: '#4a4a4a',
+                        borderRadius: '2px',
+                        border: '1px solid #5a5a5a',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: `${((pitchMult - 0.5) / 1.5) * 100}%`,
+                          background: track.steps[i] ? '#90caf9' : '#666',
+                          borderRadius: '1px',
+                          opacity: track.pitchLocked ? 0.3 : 1,
+                          transition: 'height 0.1s ease-out',
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={2.0}
+                      step={0.1}
+                      value={pitchMult.toFixed(1)}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val >= 0.5 && val <= 2.0) {
+                          updatePitchMap(track.id, i, val);
+                        }
+                      }}
+                      disabled={track.pitchLocked}
+                      style={{
+                        width: '100%',
+                        background: '#4a4a4a',
+                        color: track.steps[i] ? '#90caf9' : '#999',
+                        border: '1px solid #5a5a5a',
+                        padding: '2px 4px',
+                        fontSize: '10px',
+                        borderRadius: '2px',
+                        fontFamily: 'monospace',
+                        textAlign: 'center',
+                        opacity: track.pitchLocked ? 0.3 : 1,
+                      }}
+                      title={`Step ${i + 1}: ${pitchMult.toFixed(2)}x`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Main Controls */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '16px' }}>
