@@ -93,7 +93,8 @@ export class FMSynth {
     operatorParams: OperatorParams[],
     lfoParams: LFOParams,
     algorithm: FMAlgorithm = 'serial',
-    pitchEnvelope?: PitchEnvelopeParams
+    pitchEnvelope?: PitchEnvelopeParams,
+    velocity: number = 1.0
   ) {
     const currentTime = this.audioContext.currentTime;
 
@@ -146,9 +147,9 @@ export class FMSynth {
       const envGain = this.audioContext.createGain();
       envGain.gain.value = 0;
 
-      // Operator output gain
+      // Operator output gain (apply velocity)
       const opGain = this.audioContext.createGain();
-      opGain.gain.value = params.level;
+      opGain.gain.value = params.level * velocity;
 
       // Feedback
       const feedbackDelay = this.audioContext.createDelay();

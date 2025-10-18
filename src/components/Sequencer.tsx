@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FMSynth } from '../audio/FMSynth';
 import type { OperatorParams, LFOParams, PitchEnvelopeParams, FMAlgorithm } from '../audio/types';
 import { ADSRGraph } from './ADSRGraph';
+import { RectSlider } from './RectSlider';
 import {
   FaPlay,
   FaPause,
@@ -26,6 +27,7 @@ interface TrackData {
   algorithm: FMAlgorithm;
   pitchEnvelope: PitchEnvelopeParams;
   pitchMap: number[];
+  velocityMap: number[]; // Velocity per step (0.0 - 1.0)
   noteLength: number; // Length in steps (1.0 = one step)
   activeSynth: FMSynth | null;
   isExpanded: boolean;
@@ -102,6 +104,7 @@ export const Sequencer = () => {
         duckingGains.push(gain);
         trackSynths[i].connectSidechainGain(gain);
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         duckingGains.push(null as any);
       }
     }
@@ -122,6 +125,7 @@ export const Sequencer = () => {
         algorithm: 'parallel' as FMAlgorithm,
         pitchEnvelope: { attack: 0.03263920787813766, decay: 0.0633337102583343, depth: 2 },
         pitchMap: new Array(64).fill(1),
+        velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
         activeSynth: trackSynths[0],
         isExpanded: false,
@@ -148,6 +152,7 @@ export const Sequencer = () => {
         algorithm: 'serial' as FMAlgorithm,
         pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
         pitchMap: new Array(64).fill(1),
+        velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
         activeSynth: trackSynths[1],
         isExpanded: false,
@@ -174,6 +179,7 @@ export const Sequencer = () => {
         algorithm: 'parallel' as FMAlgorithm,
         pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
         pitchMap: new Array(64).fill(1),
+        velocityMap: new Array(64).fill(1),
         noteLength: 0.5,
         activeSynth: trackSynths[2],
         isExpanded: false,
@@ -200,6 +206,7 @@ export const Sequencer = () => {
         algorithm: 'hybrid1' as FMAlgorithm,
         pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
         pitchMap: new Array(64).fill(1),
+        velocityMap: new Array(64).fill(1),
         noteLength: 2.0,
         activeSynth: trackSynths[3],
         isExpanded: false,
@@ -220,6 +227,8 @@ export const Sequencer = () => {
         const parsed = JSON.parse(savedData);
         const restoredTracks = parsed.map((track: TrackData, index: number) => ({
           ...track,
+          // Add velocityMap if it doesn't exist (for backward compatibility)
+          velocityMap: track.velocityMap || new Array(64).fill(1),
           activeSynth: trackSynths[index],
           duckingGain: index > 0 ? duckingGains[index] : null,
         }));
@@ -293,6 +302,9 @@ export const Sequencer = () => {
               const pitchMultiplier = track.pitchEnabled ? (track.pitchMap[currentStepToPlay] || 1) : 1;
               const adjustedFrequency = track.frequency * pitchMultiplier;
 
+              // Get velocity for this step
+              const velocity = track.velocityMap[currentStepToPlay] || 1;
+
               // Use note length setting (in steps)
               const noteDuration = (stepDuration * track.noteLength) / 1000;
 
@@ -309,7 +321,8 @@ export const Sequencer = () => {
                 track.operators,
                 effectiveLfo,
                 track.algorithm,
-                effectivePitchEnv
+                effectivePitchEnv,
+                velocity
               );
 
               // Trigger ducking when CH1 (Kick) plays
@@ -427,6 +440,16 @@ export const Sequencer = () => {
     );
   };
 
+  const updateVelocityMap = (trackId: number, stepIndex: number, velocity: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId
+          ? { ...track, velocityMap: track.velocityMap.map((v, i) => (i === stepIndex ? velocity : v)) }
+          : track
+      )
+    );
+  };
+
   const updateNoteLength = (trackId: number, noteLength: number) => {
     setTracks(prev =>
       prev.map(track =>
@@ -513,7 +536,7 @@ export const Sequencer = () => {
           })
         );
         showToast('音色パラメータをペーストしました！');
-      } catch (_e) {
+      } catch {
         showToast('無効なパラメータです');
       }
     });
@@ -930,7 +953,7 @@ export const Sequencer = () => {
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Pitch per Step (0.5x - 2.0x)</span>
-                <span style={{ fontSize: '11px', color: '#777' }}>Adjust pitch for each step</span>
+                <span style={{ fontSize: '11px', color: '#777' }}>Drag to adjust pitch</span>
               </div>
               <div
                 style={{
@@ -942,19 +965,14 @@ export const Sequencer = () => {
                 {Array.from({ length: Math.min(stepCount, 16) }, (_, i) => {
                   const pitchMult = track.pitchMap[i] || 1;
                   return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                      <input
-                        type="range"
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <RectSlider
+                        value={pitchMult}
                         min={0.5}
                         max={2.0}
                         step={0.1}
-                        value={pitchMult}
-                        onChange={e => updatePitchMap(track.id, i, Number(e.target.value))}
-                        style={{
-                          width: '100%',
-                          opacity: track.steps[i] ? 1 : 0.5,
-                        }}
-                        title={`Step ${i + 1}: ${pitchMult.toFixed(1)}x`}
+                        onChange={(value) => updatePitchMap(track.id, i, value)}
+                        opacity={track.steps[i] ? 1 : 0.5}
                       />
                       <div style={{ fontSize: '9px', color: track.steps[i] ? '#90caf9' : '#666', fontFamily: 'monospace', height: '12px' }}>
                         {pitchMult.toFixed(1)}
@@ -965,6 +983,40 @@ export const Sequencer = () => {
               </div>
             </div>
           )}
+
+          {/* Velocity Control - Independent input for each step */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Velocity per Step (0.0 - 1.0)</span>
+              <span style={{ fontSize: '11px', color: '#777' }}>Drag to adjust volume</span>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${Math.min(stepCount, 16)}, 1fr)`,
+                gap: '4px',
+              }}
+            >
+              {Array.from({ length: Math.min(stepCount, 16) }, (_, i) => {
+                const velocity = track.velocityMap[i] || 1;
+                return (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <RectSlider
+                      value={velocity}
+                      min={0.0}
+                      max={1.0}
+                      step={0.05}
+                      onChange={(value) => updateVelocityMap(track.id, i, value)}
+                      opacity={track.steps[i] ? 1 : 0.5}
+                    />
+                    <div style={{ fontSize: '9px', color: track.steps[i] ? '#90caf9' : '#666', fontFamily: 'monospace', height: '12px' }}>
+                      {(velocity * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Main Controls */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '16px' }}>
