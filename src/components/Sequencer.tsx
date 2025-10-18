@@ -33,6 +33,8 @@ interface TrackData {
   isExpanded: boolean;
   lfoEnabled: boolean;
   pitchEnabled: boolean;
+  pitchControlVisible: boolean; // Toggle pitch control UI
+  velocityControlVisible: boolean; // Toggle velocity control UI
   duckingEnabled: boolean;
   duckingGain: GainNode | null; // For tracks 2,3,4 to receive ducking signal
   duckingAmount: number; // How much to reduce volume (0-1, 0 = mute, 1 = no change)
@@ -131,6 +133,8 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
+        pitchControlVisible: false,
+        velocityControlVisible: false,
         duckingEnabled: false,
         duckingGain: duckingGains[0],
         duckingAmount: 0.3, // Duck to 30%
@@ -158,6 +162,8 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
+        pitchControlVisible: false,
+        velocityControlVisible: false,
         duckingEnabled: false,
         duckingGain: duckingGains[1],
         duckingAmount: 0.3,
@@ -185,6 +191,8 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: false,
+        pitchControlVisible: false,
+        velocityControlVisible: false,
         duckingEnabled: false,
         duckingGain: duckingGains[2],
         duckingAmount: 0.3,
@@ -212,6 +220,8 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
+        pitchControlVisible: false,
+        velocityControlVisible: false,
         duckingEnabled: false,
         duckingGain: duckingGains[3],
         duckingAmount: 0.3,
@@ -227,8 +237,10 @@ export const Sequencer = () => {
         const parsed = JSON.parse(savedData);
         const restoredTracks = parsed.map((track: TrackData, index: number) => ({
           ...track,
-          // Add velocityMap if it doesn't exist (for backward compatibility)
+          // Add missing fields if they don't exist (for backward compatibility)
           velocityMap: track.velocityMap || new Array(64).fill(1),
+          pitchControlVisible: track.pitchControlVisible ?? false,
+          velocityControlVisible: track.velocityControlVisible ?? false,
           activeSynth: trackSynths[index],
           duckingGain: index > 0 ? duckingGains[index] : null,
         }));
@@ -478,6 +490,22 @@ export const Sequencer = () => {
     setTracks(prev =>
       prev.map(track =>
         track.id === trackId ? { ...track, pitchEnabled: !track.pitchEnabled } : track
+      )
+    );
+  };
+
+  const togglePitchControl = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, pitchControlVisible: !track.pitchControlVisible } : track
+      )
+    );
+  };
+
+  const toggleVelocityControl = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, velocityControlVisible: !track.velocityControlVisible } : track
       )
     );
   };
@@ -921,6 +949,40 @@ export const Sequencer = () => {
             </div>
           </div>
 
+          {/* Control Toggle Buttons */}
+          <div style={{ marginBottom: '12px', display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => togglePitchControl(track.id)}
+              style={{
+                background: track.pitchControlVisible ? '#90caf9' : '#4a4a4a',
+                color: track.pitchControlVisible ? '#2a2a2a' : '#e0e0e0',
+                border: '1px solid #5a5a5a',
+                padding: '6px 12px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontWeight: '500',
+              }}
+            >
+              Pitch Control
+            </button>
+            <button
+              onClick={() => toggleVelocityControl(track.id)}
+              style={{
+                background: track.velocityControlVisible ? '#90caf9' : '#4a4a4a',
+                color: track.velocityControlVisible ? '#2a2a2a' : '#e0e0e0',
+                border: '1px solid #5a5a5a',
+                padding: '6px 12px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontWeight: '500',
+              }}
+            >
+              Velocity Control
+            </button>
+          </div>
+
           {/* Note Sequencer - On/Off buttons */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999' }}>Notes</div>
@@ -949,7 +1011,7 @@ export const Sequencer = () => {
           </div>
 
           {/* Pitch Control - Independent input for each step */}
-          {track.pitchEnabled && (
+          {track.pitchEnabled && track.pitchControlVisible && (
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Pitch per Step (0.5x - 2.0x)</span>
@@ -985,6 +1047,7 @@ export const Sequencer = () => {
           )}
 
           {/* Velocity Control - Independent input for each step */}
+          {track.velocityControlVisible && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Velocity per Step (0.0 - 1.0)</span>
@@ -1017,6 +1080,7 @@ export const Sequencer = () => {
               })}
             </div>
           </div>
+          )}
 
           {/* Main Controls */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '16px' }}>
