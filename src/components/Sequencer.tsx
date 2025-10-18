@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { FMSynth } from '../audio/FMSynth';
 import type { OperatorParams, LFOParams, PitchEnvelopeParams, FMAlgorithm } from '../audio/types';
+import { ADSRGraph } from './ADSRGraph';
+import {
+  FaPlay,
+  FaPause,
+  FaRandom,
+  FaCopy,
+  FaPaste,
+  FaTrash,
+  FaUndo,
+  FaVolumeMute,
+  FaVolumeUp,
+  FaChevronDown,
+  FaChevronUp
+} from 'react-icons/fa';
 
 interface TrackData {
   id: number;
@@ -17,7 +31,6 @@ interface TrackData {
   isExpanded: boolean;
   lfoEnabled: boolean;
   pitchEnabled: boolean;
-  pitchLocked: boolean; // Lock pitch map editing
   duckingEnabled: boolean;
   duckingGain: GainNode | null; // For tracks 2,3,4 to receive ducking signal
   duckingAmount: number; // How much to reduce volume (0-1, 0 = mute, 1 = no change)
@@ -114,7 +127,6 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
-        pitchLocked: false,
         duckingEnabled: false,
         duckingGain: duckingGains[0],
         duckingAmount: 0.3, // Duck to 30%
@@ -141,7 +153,6 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
-        pitchLocked: false,
         duckingEnabled: false,
         duckingGain: duckingGains[1],
         duckingAmount: 0.3,
@@ -168,7 +179,6 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: false,
-        pitchLocked: false,
         duckingEnabled: false,
         duckingGain: duckingGains[2],
         duckingAmount: 0.3,
@@ -195,7 +205,6 @@ export const Sequencer = () => {
         isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
-        pitchLocked: false,
         duckingEnabled: false,
         duckingGain: duckingGains[3],
         duckingAmount: 0.3,
@@ -458,14 +467,6 @@ export const Sequencer = () => {
     );
   };
 
-  const togglePitchLock = (trackId: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, pitchLocked: !track.pitchLocked } : track
-      )
-    );
-  };
-
   const toggleMute = (trackId: number) => {
     setTracks(prev =>
       prev.map(track =>
@@ -688,9 +689,12 @@ export const Sequencer = () => {
               cursor: 'pointer',
               borderRadius: '4px',
               transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
           >
-            {isPlaying ? 'STOP' : 'PLAY'}
+            {isPlaying ? <><FaPause /> STOP</> : <><FaPlay /> PLAY</>}
           </button>
 
           <label style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -744,9 +748,12 @@ export const Sequencer = () => {
               fontWeight: '500',
               cursor: 'pointer',
               borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
           >
-            CLEAR
+            <FaTrash /> CLEAR
           </button>
 
           <button
@@ -760,9 +767,12 @@ export const Sequencer = () => {
               fontWeight: '500',
               cursor: 'pointer',
               borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
           >
-            RESET
+            <FaUndo /> RESET
           </button>
         </div>
       </div>
@@ -788,14 +798,17 @@ export const Sequencer = () => {
                   background: track.isMuted ? '#d32f2f' : '#4a4a4a',
                   color: '#e0e0e0',
                   border: '1px solid #5a5a5a',
-                  padding: '4px 10px',
+                  padding: '6px 12px',
                   fontSize: '12px',
                   cursor: 'pointer',
                   borderRadius: '4px',
                   fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                {track.isMuted ? 'MUTED' : 'M'}
+                {track.isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
               </button>
               <button
                 onClick={() => randomizeTrack(track.id)}
@@ -807,9 +820,12 @@ export const Sequencer = () => {
                   fontSize: '13px',
                   cursor: 'pointer',
                   borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                RAND
+                <FaRandom /> RAND
               </button>
               <button
                 onClick={() => randomizeSequence(track.id)}
@@ -821,9 +837,12 @@ export const Sequencer = () => {
                   fontSize: '13px',
                   cursor: 'pointer',
                   borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                RAND SEQ
+                <FaRandom /> SEQ
               </button>
               <button
                 onClick={() => copyTrackParams(track.id)}
@@ -835,9 +854,12 @@ export const Sequencer = () => {
                   fontSize: '13px',
                   cursor: 'pointer',
                   borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                COPY
+                <FaCopy />
               </button>
               <button
                 onClick={() => pasteTrackParams(track.id)}
@@ -849,9 +871,12 @@ export const Sequencer = () => {
                   fontSize: '13px',
                   cursor: 'pointer',
                   borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                PASTE
+                <FaPaste />
               </button>
               <select
                 value={track.algorithm}
@@ -905,9 +930,7 @@ export const Sequencer = () => {
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', marginBottom: '4px', color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Pitch per Step (0.5x - 2.0x)</span>
-                {!track.pitchLocked && (
-                  <span style={{ fontSize: '11px', color: '#777' }}>Adjust pitch for each step</span>
-                )}
+                <span style={{ fontSize: '11px', color: '#777' }}>Adjust pitch for each step</span>
               </div>
               <div
                 style={{
@@ -927,10 +950,9 @@ export const Sequencer = () => {
                         step={0.1}
                         value={pitchMult}
                         onChange={e => updatePitchMap(track.id, i, Number(e.target.value))}
-                        disabled={track.pitchLocked}
                         style={{
                           width: '100%',
-                          opacity: track.pitchLocked ? 0.3 : (track.steps[i] ? 1 : 0.5),
+                          opacity: track.steps[i] ? 1 : 0.5,
                         }}
                         title={`Step ${i + 1}: ${pitchMult.toFixed(1)}x`}
                       />
@@ -1020,81 +1042,81 @@ export const Sequencer = () => {
               />
               <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.pitchEnvelope.depth.toFixed(2)}</div>
             </div>
-
-            <div>
-              <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={track.pitchLocked}
-                  onChange={() => togglePitchLock(track.id)}
-                  style={{ width: '16px', height: '16px' }}
-                />
-                Lock Pitch
-              </label>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '2px', height: '48px', display: 'flex', alignItems: 'center' }}>
-                {track.pitchLocked ? 'Locked' : 'Unlocked'}
-              </div>
-            </div>
           </div>
 
           {/* ADSR Envelope Controls - Common controls for all operators */}
           <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
             <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>ADSR Envelope (All Operators)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Attack</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={0.1}
-                  step={0.001}
-                  value={track.operators[0]?.attack ?? 0}
-                  onChange={e => updateAllOperatorsADSR(track.id, 'attack', Number(e.target.value))}
-                  style={{ width: '100%' }}
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+              {/* ADSR Graph */}
+              <div style={{ flex: '0 0 auto' }}>
+                <ADSRGraph
+                  attack={track.operators[0]?.attack ?? 0}
+                  decay={track.operators[0]?.decay ?? 0}
+                  sustain={track.operators[0]?.sustain ?? 0}
+                  release={track.operators[0]?.release ?? 0}
+                  width={240}
+                  height={100}
                 />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.attack ?? 0).toFixed(3)}s</div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Decay</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.operators[0]?.decay ?? 0}
-                  onChange={e => updateAllOperatorsADSR(track.id, 'decay', Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.decay ?? 0).toFixed(2)}s</div>
-              </div>
+              {/* ADSR Controls */}
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Attack</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.1}
+                    step={0.001}
+                    value={track.operators[0]?.attack ?? 0}
+                    onChange={e => updateAllOperatorsADSR(track.id, 'attack', Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.attack ?? 0).toFixed(3)}s</div>
+                </div>
 
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Sustain</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.operators[0]?.sustain ?? 0}
-                  onChange={e => updateAllOperatorsADSR(track.id, 'sustain', Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.sustain ?? 0).toFixed(2)}</div>
-              </div>
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Decay</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={track.operators[0]?.decay ?? 0}
+                    onChange={e => updateAllOperatorsADSR(track.id, 'decay', Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.decay ?? 0).toFixed(2)}s</div>
+                </div>
 
-              <div>
-                <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Release</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={track.operators[0]?.release ?? 0}
-                  onChange={e => updateAllOperatorsADSR(track.id, 'release', Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.release ?? 0).toFixed(2)}s</div>
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Sustain</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={track.operators[0]?.sustain ?? 0}
+                    onChange={e => updateAllOperatorsADSR(track.id, 'sustain', Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.sustain ?? 0).toFixed(2)}</div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Release</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={track.operators[0]?.release ?? 0}
+                    onChange={e => updateAllOperatorsADSR(track.id, 'release', Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.release ?? 0).toFixed(2)}s</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1186,7 +1208,7 @@ export const Sequencer = () => {
               }}
             >
               <span>Operators & Advanced</span>
-              <span>{track.isExpanded ? '▲' : '▼'}</span>
+              {track.isExpanded ? <FaChevronUp /> : <FaChevronDown />}
             </button>
           </div>
 
