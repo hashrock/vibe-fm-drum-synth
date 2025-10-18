@@ -12,9 +12,7 @@ import {
   FaTrash,
   FaUndo,
   FaVolumeMute,
-  FaVolumeUp,
-  FaChevronDown,
-  FaChevronUp
+  FaVolumeUp
 } from 'react-icons/fa';
 
 interface TrackData {
@@ -30,7 +28,6 @@ interface TrackData {
   velocityMap: number[]; // Velocity per step (0.0 - 1.0)
   noteLength: number; // Length in steps (1.0 = one step)
   activeSynth: FMSynth | null;
-  isExpanded: boolean;
   lfoEnabled: boolean;
   pitchEnabled: boolean;
   pitchControlVisible: boolean; // Toggle pitch control UI
@@ -130,7 +127,6 @@ export const Sequencer = () => {
         velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
         activeSynth: trackSynths[0],
-        isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
@@ -159,7 +155,6 @@ export const Sequencer = () => {
         velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
         activeSynth: trackSynths[1],
-        isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
@@ -188,7 +183,6 @@ export const Sequencer = () => {
         velocityMap: new Array(64).fill(1),
         noteLength: 0.5,
         activeSynth: trackSynths[2],
-        isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: false,
         pitchControlVisible: false,
@@ -217,7 +211,6 @@ export const Sequencer = () => {
         velocityMap: new Array(64).fill(1),
         noteLength: 2.0,
         activeSynth: trackSynths[3],
-        isExpanded: false,
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
@@ -466,14 +459,6 @@ export const Sequencer = () => {
     setTracks(prev =>
       prev.map(track =>
         track.id === trackId ? { ...track, noteLength } : track
-      )
-    );
-  };
-
-  const toggleExpanded = (trackId: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, isExpanded: !track.isExpanded } : track
       )
     );
   };
@@ -1160,87 +1145,6 @@ export const Sequencer = () => {
             </div>
           </div>
 
-          {/* ADSR Envelope Controls - Common controls for all operators */}
-          <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>ADSR Envelope (All Operators)</div>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-              {/* ADSR Graph */}
-              <div style={{ flex: '0 0 auto' }}>
-                <ADSRGraph
-                  attack={track.operators[0]?.attack ?? 0}
-                  decay={track.operators[0]?.decay ?? 0}
-                  sustain={track.operators[0]?.sustain ?? 0}
-                  release={track.operators[0]?.release ?? 0}
-                  width={240}
-                  height={100}
-                  onAttackChange={(value) => updateAllOperatorsADSR(track.id, 'attack', value)}
-                  onDecayChange={(value) => updateAllOperatorsADSR(track.id, 'decay', value)}
-                  onSustainChange={(value) => updateAllOperatorsADSR(track.id, 'sustain', value)}
-                  onReleaseChange={(value) => updateAllOperatorsADSR(track.id, 'release', value)}
-                />
-              </div>
-
-              {/* ADSR Controls */}
-              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Attack</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={0.1}
-                    step={0.001}
-                    value={track.operators[0]?.attack ?? 0}
-                    onChange={e => updateAllOperatorsADSR(track.id, 'attack', Number(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.attack ?? 0).toFixed(3)}s</div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Decay</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={track.operators[0]?.decay ?? 0}
-                    onChange={e => updateAllOperatorsADSR(track.id, 'decay', Number(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.decay ?? 0).toFixed(2)}s</div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Sustain</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={track.operators[0]?.sustain ?? 0}
-                    onChange={e => updateAllOperatorsADSR(track.id, 'sustain', Number(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.sustain ?? 0).toFixed(2)}</div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Release</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={track.operators[0]?.release ?? 0}
-                    onChange={e => updateAllOperatorsADSR(track.id, 'release', Number(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.operators[0]?.release ?? 0).toFixed(2)}s</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Ducking - Only for tracks 2, 3, 4 */}
           {track.id >= 1 && track.duckingEnabled && (
             <div style={{ marginTop: '12px', padding: '12px', background: '#3a3a3a', borderRadius: '4px' }}>
@@ -1309,71 +1213,79 @@ export const Sequencer = () => {
             </div>
           )}
 
-          {/* Operators Toggle */}
-          <div style={{ marginTop: '12px' }}>
-            <button
-              onClick={() => toggleExpanded(track.id)}
-              style={{
-                width: '100%',
-                background: '#3a3a3a',
-                color: '#e0e0e0',
-                border: '1px solid #4a4a4a',
-                padding: '8px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <span>Operators & Advanced</span>
-              {track.isExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            </button>
-          </div>
+          {/* Operators */}
+          <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
+            <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>Operators</div>
 
-          {/* Operators - Collapsible */}
-          {track.isExpanded && (
-            <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>Operators</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                {track.operators.map((op, opIndex) => (
-                  <div key={opIndex} style={{ background: '#454545', padding: '8px', borderRadius: '4px' }}>
-                    <div style={{ fontWeight: '500', marginBottom: '8px', textAlign: 'center', fontSize: '13px' }}>
-                      OP{opIndex + 1}
-                    </div>
-                    {[
-                      { key: 'ratio', label: 'Ratio', min: 0.1, max: 16 },
-                      { key: 'level', label: 'Level', min: 0, max: 1 },
-                      { key: 'attack', label: 'Attack', min: 0, max: 0.1 },
-                      { key: 'decay', label: 'Decay', min: 0, max: 1 },
-                      { key: 'sustain', label: 'Sustain', min: 0, max: 1 },
-                      { key: 'release', label: 'Release', min: 0, max: 1 },
-                      { key: 'feedbackAmount', label: 'Feedback', min: 0, max: 1 }
-                    ].map(({ key, label, min, max }) => (
-                      <div key={key} style={{ marginBottom: '6px' }}>
-                        <div style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                          <span>{label}</span>
-                          <span style={{ color: '#999' }}>{op[key as keyof OperatorParams].toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={min}
-                          max={max}
-                          step={0.01}
-                          value={op[key as keyof OperatorParams]}
-                          onChange={e =>
-                            updateOperator(track.id, opIndex, key as keyof OperatorParams, Number(e.target.value))
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ))}
+            {/* ADSR Envelope - All Operators */}
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '12px', color: '#999', marginBottom: '8px' }}>ADSR (All Operators)</div>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <ADSRGraph
+                  attack={track.operators[0]?.attack ?? 0}
+                  decay={track.operators[0]?.decay ?? 0}
+                  sustain={track.operators[0]?.sustain ?? 0}
+                  release={track.operators[0]?.release ?? 0}
+                  width={300}
+                  height={120}
+                  onAttackChange={(value) => updateAllOperatorsADSR(track.id, 'attack', value)}
+                  onDecayChange={(value) => updateAllOperatorsADSR(track.id, 'decay', value)}
+                  onSustainChange={(value) => updateAllOperatorsADSR(track.id, 'sustain', value)}
+                  onReleaseChange={(value) => updateAllOperatorsADSR(track.id, 'release', value)}
+                />
               </div>
             </div>
-          )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+              {track.operators.map((op, opIndex) => (
+                <div key={opIndex} style={{ background: '#454545', padding: '6px', borderRadius: '4px' }}>
+                  <div style={{ fontWeight: '500', marginBottom: '6px', textAlign: 'center', fontSize: '12px' }}>
+                    OP{opIndex + 1}
+                  </div>
+
+                  {/* ADSR Graph for this operator */}
+                  <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
+                    <ADSRGraph
+                      attack={op.attack}
+                      decay={op.decay}
+                      sustain={op.sustain}
+                      release={op.release}
+                      width={140}
+                      height={70}
+                      onAttackChange={(value) => updateOperator(track.id, opIndex, 'attack', value)}
+                      onDecayChange={(value) => updateOperator(track.id, opIndex, 'decay', value)}
+                      onSustainChange={(value) => updateOperator(track.id, opIndex, 'sustain', value)}
+                      onReleaseChange={(value) => updateOperator(track.id, opIndex, 'release', value)}
+                    />
+                  </div>
+
+                  {/* Other parameters */}
+                  {[
+                    { key: 'ratio', label: 'Ratio', min: 0.1, max: 16 },
+                    { key: 'level', label: 'Level', min: 0, max: 1 },
+                    { key: 'feedbackAmount', label: 'FB', min: 0, max: 1 }
+                  ].map(({ key, label, min, max }) => (
+                    <div key={key} style={{ marginBottom: '4px' }}>
+                      <div style={{ fontSize: '10px', display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{label}</span>
+                        <span style={{ color: '#999' }}>{op[key as keyof OperatorParams].toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        step={0.01}
+                        value={op[key as keyof OperatorParams]}
+                        onChange={e =>
+                          updateOperator(track.id, opIndex, key as keyof OperatorParams, Number(e.target.value))
+                        }
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ))}
 
