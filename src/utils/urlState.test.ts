@@ -57,6 +57,8 @@ function createMockTrack(id: number): TrackData {
     },
     algorithm: ['serial', 'parallel', 'hybrid1', 'hybrid2'][id % 4] as any,
     pitchEnvelope: {
+      attack: 0.01,
+      decay: 0.5,
       depth: 0.5 + id * 0.2,
     },
     pitchMap: new Array(64).fill(1.0).map((_, i) => 1 + (i % 8) * 0.1),
@@ -149,13 +151,15 @@ describe('URL State Serialization', () => {
       const restored = decoded!.tracks[i];
 
       // Velocity map (4-bit precision = 1/15 = ~0.067 resolution)
+      expect(restored.velocityMap).toBeDefined();
       for (let j = 0; j < 64; j++) {
-        expect(Math.abs(restored.velocityMap[j] - original.velocityMap[j])).toBeLessThan(0.1);
+        expect(Math.abs(restored.velocityMap![j] - original.velocityMap[j])).toBeLessThan(0.1);
       }
 
       // Pitch map (4-bit precision, range 0.25-4.0)
+      expect(restored.pitchMap).toBeDefined();
       for (let j = 0; j < 64; j++) {
-        expect(Math.abs(restored.pitchMap[j] - original.pitchMap[j])).toBeLessThan(0.3);
+        expect(Math.abs(restored.pitchMap![j] - original.pitchMap[j])).toBeLessThan(0.3);
       }
     }
   });
@@ -229,8 +233,10 @@ describe('URL State Serialization', () => {
       const restored = decoded!.tracks[i];
 
       // Ducking amount (6-bit precision = 1/63 = ~0.016 resolution)
-      expect(Math.abs(restored.duckingAmount - original.duckingAmount)).toBeLessThan(0.02);
+      expect(restored.duckingAmount).toBeDefined();
+      expect(Math.abs(restored.duckingAmount! - original.duckingAmount)).toBeLessThan(0.02);
       // Ducking release (8-bit, 0.01-1.0 range = ~0.004 resolution)
+      expect(restored.duckingRelease).toBeDefined();
       expect(restored.duckingRelease).toBeCloseTo(original.duckingRelease, 2);
     }
   });

@@ -1507,7 +1507,7 @@ export const Sequencer = () => {
                       algorithm={algo}
                       hoveredOperator={
                         hoveredOperator?.trackId === track.id && typeof hoveredOperator.operatorIndex === 'number'
-                          ? hoveredOperator.operatorIndex
+                          ? (hoveredOperator.operatorIndex as 0 | 1 | 2 | 3)
                           : null
                       }
                       onHover={opIndex => {

@@ -95,11 +95,6 @@ function decodeUint16(bytes: Uint8Array, offset: number): number {
   return (bytes[offset] << 8) | bytes[offset + 1];
 }
 
-// Encode uint8
-function encodeUint8(value: number): number {
-  return Math.round(Math.max(0, Math.min(255, value)));
-}
-
 // Encode float to byte (0-1 range)
 function encodeFloat01(value: number): number {
   return Math.round(Math.max(0, Math.min(1, value)) * 255);
