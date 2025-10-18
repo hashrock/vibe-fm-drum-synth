@@ -1173,6 +1173,10 @@ export const Sequencer = () => {
                   release={track.operators[0]?.release ?? 0}
                   width={240}
                   height={100}
+                  onAttackChange={(value) => updateAllOperatorsADSR(track.id, 'attack', value)}
+                  onDecayChange={(value) => updateAllOperatorsADSR(track.id, 'decay', value)}
+                  onSustainChange={(value) => updateAllOperatorsADSR(track.id, 'sustain', value)}
+                  onReleaseChange={(value) => updateAllOperatorsADSR(track.id, 'release', value)}
                 />
               </div>
 
