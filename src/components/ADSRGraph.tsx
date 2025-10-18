@@ -1,4 +1,5 @@
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
 
 interface ADSRGraphProps {
   attack: number;
@@ -15,6 +16,33 @@ interface ADSRGraphProps {
 
 type ControlPoint = 'attack' | 'decay' | 'sustain' | 'release' | null;
 
+const MIN_TIME = 0;
+const MAX_ATTACK = 0.1; // Matches slider range for attack
+const MAX_DECAY = 1;
+const MAX_RELEASE = 1;
+const SUSTAIN_DISPLAY_TIME = 0.3; // Visual-only sustain duration
+const HANDLE_RADIUS = 8;
+
+const roundAttack = (value: number) => Number(value.toFixed(3));
+const roundTime = (value: number) => Number(value.toFixed(2));
+const roundSustain = (value: number) => Number(value.toFixed(2));
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const getCursor = (point: ControlPoint) => {
+  switch (point) {
+    case 'sustain':
+      return 'ns-resize';
+    case 'decay':
+      return 'move';
+    case 'attack':
+    case 'release':
+      return 'ew-resize';
+    default:
+      return 'default';
+  }
+};
+
 export const ADSRGraph = ({
   attack,
   decay,
@@ -28,127 +56,111 @@ export const ADSRGraph = ({
   onReleaseChange,
 }: ADSRGraphProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<ControlPoint>(null);
   const [hovering, setHovering] = useState<ControlPoint>(null);
 
   const padding = 10;
   const graphWidth = width - padding * 2;
   const graphHeight = height - padding * 2;
+  const baseY = padding + graphHeight;
 
-  // Calculate positions
-  const calculatePositions = () => {
-    const totalTime = attack + decay + 0.5 + release;
-    const attackX = (attack / totalTime) * graphWidth;
-    const decayX = attackX + (decay / totalTime) * graphWidth;
-    const sustainX = decayX + (0.5 / totalTime) * graphWidth;
-    const releaseX = sustainX + (release / totalTime) * graphWidth;
+  const displayAttack = clamp(attack, MIN_TIME, MAX_ATTACK);
+  const displayDecay = clamp(decay, MIN_TIME, MAX_DECAY);
+  const displayRelease = clamp(release, MIN_TIME, MAX_RELEASE);
+  const sustainLevel = clamp(sustain, 0, 1);
 
-    const peakY = padding;
-    const sustainY = padding + (1 - sustain) * graphHeight;
-    const endY = padding + graphHeight;
+  const xScale = graphWidth / (MAX_ATTACK + MAX_DECAY + MAX_RELEASE + SUSTAIN_DISPLAY_TIME);
+  const sustainHoldWidth = SUSTAIN_DISPLAY_TIME * xScale;
+
+  const positions = useMemo(() => {
+    const attackX = padding + displayAttack * xScale;
+    const decayX = attackX + displayDecay * xScale;
+    const sustainX = decayX + sustainHoldWidth;
+    const releaseX = sustainX + displayRelease * xScale;
+    const sustainY = padding + (1 - sustainLevel) * graphHeight;
 
     return {
-      attack: { x: padding + attackX, y: peakY },
-      decay: { x: padding + decayX, y: sustainY },
-      sustain: { x: padding + sustainX, y: sustainY },
-      release: { x: padding + releaseX, y: endY },
+      attack: { x: attackX, y: padding },
+      decay: { x: decayX, y: sustainY },
+      sustain: { x: sustainX, y: sustainY },
+      release: { x: releaseX, y: baseY },
     };
-  };
+  }, [baseY, displayAttack, displayDecay, displayRelease, graphHeight, padding, sustainHoldWidth, sustainLevel, xScale]);
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = (e: MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const positions = calculatePositions();
-    const hitRadius = 8;
-
-    // Check which control point was clicked (except release - it's not draggable)
-    for (const [key, pos] of Object.entries(positions)) {
-      if (key === 'release') continue; // Release point is not draggable
-      const distance = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
-      if (distance <= hitRadius) {
-        setDragging(key as ControlPoint);
-        return;
+    let target: ControlPoint = null;
+    for (const [key, pos] of Object.entries(positions) as [ControlPoint, { x: number; y: number }][]) {
+      const distance = Math.hypot(x - pos.x, y - pos.y);
+      if (distance <= HANDLE_RADIUS) {
+        target = key;
+        break;
       }
+    }
+
+    if (target) {
+      e.preventDefault();
+      setDragging(target);
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseMove = (e: MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (dragging) {
-      // Update values based on dragging
-      const relativeX = Math.max(0, Math.min(graphWidth, x - padding));
-      const relativeY = Math.max(0, Math.min(graphHeight, y - padding));
-      const normalizedY = 1 - relativeY / graphHeight;
+    const boundedX = clamp(x, padding, padding + graphWidth);
+    const boundedY = clamp(y, padding, padding + graphHeight);
 
+    if (dragging) {
       switch (dragging) {
         case 'attack': {
-          // Attack time is controlled by X position
-          const totalTime = attack + decay + 0.5 + release;
-          const ratio = relativeX / graphWidth;
-          const newAttack = Math.max(0, Math.min(0.1, ratio * totalTime * 0.4));
-          onAttackChange?.(newAttack);
+          const relativeX = boundedX - padding;
+          const newAttack = clamp(relativeX / xScale, MIN_TIME, MAX_ATTACK);
+          onAttackChange?.(roundAttack(newAttack));
           break;
         }
         case 'decay': {
-          // Decay time is controlled by X position, sustain level by Y
-          const totalTime = attack + decay + 0.5 + release;
-          const attackRatio = attack / totalTime;
-          const ratio = relativeX / graphWidth - attackRatio;
-          const newDecay = Math.max(0, Math.min(1, ratio * totalTime * 1.5));
-          const newSustain = Math.max(0, Math.min(1, normalizedY));
-          onDecayChange?.(newDecay);
-          onSustainChange?.(newSustain);
+          const attackStartX = padding + displayAttack * xScale;
+          const relativeX = clamp(boundedX - attackStartX, 0, MAX_DECAY * xScale);
+          const newDecay = clamp(relativeX / xScale, MIN_TIME, MAX_DECAY);
+          const normalizedY = 1 - (boundedY - padding) / graphHeight;
+          const newSustain = clamp(normalizedY, 0, 1);
+          onDecayChange?.(roundTime(newDecay));
+          onSustainChange?.(roundSustain(newSustain));
           break;
         }
         case 'sustain': {
-          // Sustain point controls release time (X) and sustain level (Y)
-          const totalTime = attack + decay + 0.5 + release;
-          const sustainDuration = 0.5; // Fixed sustain visualization duration
-
-          // Calculate current sustain end position
-          const sustainEndX = ((attack + decay + sustainDuration) / totalTime) * graphWidth;
-
-          // Calculate how far from sustain end the user wants
-          const distanceFromSustainEnd = relativeX - sustainEndX;
-
-          // Convert to release time (positive distance = longer release)
-          const newRelease = Math.max(0, Math.min(1, (distanceFromSustainEnd / graphWidth) * totalTime * 2));
-          const newSustain = Math.max(0, Math.min(1, normalizedY));
-          onReleaseChange?.(newRelease);
-          onSustainChange?.(newSustain);
+          const normalizedY = 1 - (boundedY - padding) / graphHeight;
+          const newSustain = clamp(normalizedY, 0, 1);
+          onSustainChange?.(roundSustain(newSustain));
           break;
         }
         case 'release': {
-          // Release point is at the end - no interaction needed (controlled by sustain point)
+          const sustainStartX = positions.sustain.x;
+          const relativeX = clamp(boundedX - sustainStartX, 0, MAX_RELEASE * xScale);
+          const newRelease = clamp(relativeX / xScale, MIN_TIME, MAX_RELEASE);
+          onReleaseChange?.(roundTime(newRelease));
           break;
         }
       }
     } else {
-      // Check hovering (except release - it's not draggable)
-      const positions = calculatePositions();
-      const hitRadius = 8;
-      let foundHover: ControlPoint = null;
-
-      for (const [key, pos] of Object.entries(positions)) {
-        if (key === 'release') continue; // Release point is not hoverable
-        const distance = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
-        if (distance <= hitRadius) {
-          foundHover = key as ControlPoint;
+      let hoverTarget: ControlPoint = null;
+      for (const [key, pos] of Object.entries(positions) as [ControlPoint, { x: number; y: number }][]) {
+        const distance = Math.hypot(boundedX - pos.x, boundedY - pos.y);
+        if (distance <= HANDLE_RADIUS) {
+          hoverTarget = key;
           break;
         }
       }
-
-      setHovering(foundHover);
+      setHovering(hoverTarget);
     }
   };
 
@@ -161,13 +173,11 @@ export const ADSRGraph = ({
     setHovering(null);
   };
 
-  // Global mouse up handler
   useEffect(() => {
-    if (dragging) {
-      const handleGlobalMouseUp = () => setDragging(null);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-      return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }
+    if (!dragging) return;
+    const handleGlobalMouseUp = () => setDragging(null);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [dragging]);
 
   useEffect(() => {
@@ -177,15 +187,11 @@ export const ADSRGraph = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    const positions = calculatePositions();
-
-    // Draw grid lines
+    // Grid
     ctx.strokeStyle = '#4a4a4a';
     ctx.lineWidth = 0.5;
-
     for (let i = 0; i <= 4; i++) {
       const y = padding + (i / 4) * graphHeight;
       ctx.beginPath();
@@ -194,98 +200,99 @@ export const ADSRGraph = ({
       ctx.stroke();
     }
 
-    // Draw ADSR envelope
+    // Envelope path
     ctx.strokeStyle = '#90caf9';
     ctx.lineWidth = 2;
     ctx.beginPath();
-
-    ctx.moveTo(padding, padding + graphHeight);
+    ctx.moveTo(padding, baseY);
     ctx.lineTo(positions.attack.x, positions.attack.y);
     ctx.lineTo(positions.decay.x, positions.decay.y);
     ctx.lineTo(positions.sustain.x, positions.sustain.y);
     ctx.lineTo(positions.release.x, positions.release.y);
-
     ctx.stroke();
 
-    // Draw fill under envelope
-    ctx.fillStyle = 'rgba(144, 202, 249, 0.1)';
+    // Fill under envelope
+    ctx.fillStyle = 'rgba(144, 202, 249, 0.12)';
     ctx.beginPath();
-    ctx.moveTo(padding, padding + graphHeight);
+    ctx.moveTo(padding, baseY);
     ctx.lineTo(positions.attack.x, positions.attack.y);
     ctx.lineTo(positions.decay.x, positions.decay.y);
     ctx.lineTo(positions.sustain.x, positions.sustain.y);
     ctx.lineTo(positions.release.x, positions.release.y);
+    ctx.lineTo(positions.release.x, baseY);
     ctx.closePath();
     ctx.fill();
 
-    // Draw control points
-    const drawControlPoint = (pos: { x: number; y: number }, key: ControlPoint, interactive: boolean = true) => {
-      const isHovering = hovering === key;
-      const isDragging = dragging === key;
+    // Sustain guide
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(positions.sustain.x, padding);
+    ctx.lineTo(positions.sustain.x, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const drawHandle = (point: ControlPoint) => {
+      if (!point) return;
+      const pos = positions[point];
+      const isHover = hovering === point;
+      const isDrag = dragging === point;
 
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, isDragging ? 6 : isHovering ? 5 : 4, 0, 2 * Math.PI);
-
-      if (interactive) {
-        ctx.fillStyle = isDragging ? '#ffffff' : isHovering ? '#e0e0e0' : '#90caf9';
-      } else {
-        // Non-interactive point - dimmed
-        ctx.fillStyle = '#666666';
-      }
-
+      ctx.arc(pos.x, pos.y, isDrag ? 7 : isHover ? 6 : 5, 0, Math.PI * 2);
+      ctx.fillStyle = isDrag ? '#ffffff' : isHover ? '#e0e0e0' : '#90caf9';
       ctx.fill();
-      ctx.strokeStyle = '#2a2a2a';
-      ctx.lineWidth = interactive ? 2 : 1;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#1f1f1f';
       ctx.stroke();
     };
 
-    drawControlPoint(positions.attack, 'attack', true);
-    drawControlPoint(positions.decay, 'decay', true);
-    drawControlPoint(positions.sustain, 'sustain', true);
-    drawControlPoint(positions.release, 'release', false); // Release is not interactive
+    drawHandle('attack');
+    drawHandle('decay');
+    drawHandle('sustain');
+    drawHandle('release');
 
-    // Draw labels
+    // Labels
     ctx.fillStyle = '#999';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
 
-    const totalTime = attack + decay + 0.5 + release;
-    const attackWidth = (attack / totalTime) * graphWidth;
-    const decayWidth = (decay / totalTime) * graphWidth;
-    const sustainWidth = (0.5 / totalTime) * graphWidth;
-    const releaseWidth = (release / totalTime) * graphWidth;
+    const attackWidth = displayAttack * xScale;
+    const decayWidth = displayDecay * xScale;
+    const releaseWidth = displayRelease * xScale;
 
-    if (attackWidth > 20) {
-      ctx.fillText('A', padding + attackWidth / 2, padding + graphHeight + 8);
+    if (attackWidth > 12) {
+      ctx.fillText('A', padding + attackWidth / 2, baseY + 10);
     }
-    if (decayWidth > 20) {
-      ctx.fillText('D', padding + attackWidth + decayWidth / 2, padding + graphHeight + 8);
+    if (decayWidth > 12) {
+      ctx.fillText('D', positions.attack.x + decayWidth / 2, baseY + 10);
     }
-    if (sustainWidth > 20) {
-      ctx.fillText('S', padding + attackWidth + decayWidth + sustainWidth / 2, padding + graphHeight + 8);
+    if (sustainHoldWidth > 12) {
+      ctx.fillText('S', positions.decay.x + sustainHoldWidth / 2, baseY + 10);
     }
-    if (releaseWidth > 20) {
-      ctx.fillText('R', padding + attackWidth + decayWidth + sustainWidth + releaseWidth / 2, padding + graphHeight + 8);
+    if (releaseWidth > 12) {
+      ctx.fillText('R', positions.sustain.x + releaseWidth / 2, baseY + 10);
     }
-  }, [attack, decay, sustain, release, width, height, hovering, dragging]);
+  }, [baseY, displayAttack, displayDecay, displayRelease, graphHeight, graphWidth, height, hovering, padding, positions, sustainHoldWidth, width]);
+
+  const cursor = dragging ? getCursor(dragging) : getCursor(hovering);
 
   return (
-    <div ref={containerRef} style={{ display: 'inline-block' }}>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          border: '1px solid #4a4a4a',
-          borderRadius: '4px',
-          background: '#2a2a2a',
-          cursor: dragging ? 'grabbing' : hovering ? 'grab' : 'default',
-        }}
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        border: '1px solid #4a4a4a',
+        borderRadius: '4px',
+        background: '#2a2a2a',
+        cursor,
+        touchAction: 'none',
+      }}
+    />
   );
 };
