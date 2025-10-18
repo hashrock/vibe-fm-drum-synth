@@ -5,6 +5,8 @@ import { ADSRGraph } from './ADSRGraph';
 import { RectSlider } from './RectSlider';
 import { RotaryKnob } from './RotaryKnob';
 import { FMAlgorithmDiagram } from './FMAlgorithmDiagram';
+import { LFOGraph } from './LFOGraph';
+import { PitchEnvelopeGraph } from './PitchEnvelopeGraph';
 import {
   FaPlay,
   FaPause,
@@ -14,7 +16,9 @@ import {
   FaTrash,
   FaUndo,
   FaVolumeMute,
-  FaVolumeUp
+  FaVolumeUp,
+  FaChevronDown,
+  FaChevronUp
 } from 'react-icons/fa';
 
 interface TrackData {
@@ -29,12 +33,14 @@ interface TrackData {
   pitchMap: number[];
   velocityMap: number[]; // Velocity per step (0.0 - 1.0)
   noteLength: number; // Length in steps (1.0 = one step)
-  shuffle: number; // Swing/shuffle amount (0.0 - 1.0)
   activeSynth: FMSynth | null;
   lfoEnabled: boolean;
   pitchEnabled: boolean;
   pitchControlVisible: boolean; // Toggle pitch control UI
   velocityControlVisible: boolean; // Toggle velocity control UI
+  operatorsExpanded: boolean; // Toggle operators section visibility
+  lfoExpanded: boolean; // Toggle LFO section visibility
+  pitchEnvExpanded: boolean; // Toggle pitch envelope section visibility
   duckingEnabled: boolean;
   duckingGain: GainNode | null; // For tracks 2,3,4 to receive ducking signal
   duckingAmount: number; // How much to reduce volume (0-1, 0 = mute, 1 = no change)
@@ -50,6 +56,7 @@ export const Sequencer = () => {
   const [tracks, setTracks] = useState<TrackData[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [hoveredOperator, setHoveredOperator] = useState<{ trackId: number; operatorIndex: number | 'all' | null } | null>(null);
+  const [shuffle, setShuffle] = useState(0.0); // Global shuffle parameter
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -131,12 +138,14 @@ export const Sequencer = () => {
         pitchMap: new Array(64).fill(1),
         velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
-        shuffle: 0.0,
         activeSynth: trackSynths[0],
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
         velocityControlVisible: false,
+        operatorsExpanded: false,
+        lfoExpanded: false,
+        pitchEnvExpanded: false,
         duckingEnabled: false,
         duckingGain: duckingGains[0],
         duckingAmount: 0.3, // Duck to 30%
@@ -160,12 +169,14 @@ export const Sequencer = () => {
         pitchMap: new Array(64).fill(1),
         velocityMap: new Array(64).fill(1),
         noteLength: 1.0,
-        shuffle: 0.0,
         activeSynth: trackSynths[1],
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
         velocityControlVisible: false,
+        operatorsExpanded: false,
+        lfoExpanded: false,
+        pitchEnvExpanded: false,
         duckingEnabled: false,
         duckingGain: duckingGains[1],
         duckingAmount: 0.3,
@@ -189,12 +200,14 @@ export const Sequencer = () => {
         pitchMap: new Array(64).fill(1),
         velocityMap: new Array(64).fill(1),
         noteLength: 0.5,
-        shuffle: 0.0,
         activeSynth: trackSynths[2],
         lfoEnabled: true,
         pitchEnabled: false,
         pitchControlVisible: false,
         velocityControlVisible: false,
+        operatorsExpanded: false,
+        lfoExpanded: false,
+        pitchEnvExpanded: false,
         duckingEnabled: false,
         duckingGain: duckingGains[2],
         duckingAmount: 0.3,
@@ -218,12 +231,14 @@ export const Sequencer = () => {
         pitchMap: new Array(64).fill(1),
         velocityMap: new Array(64).fill(1),
         noteLength: 2.0,
-        shuffle: 0.0,
         activeSynth: trackSynths[3],
         lfoEnabled: true,
         pitchEnabled: true,
         pitchControlVisible: false,
         velocityControlVisible: false,
+        operatorsExpanded: false,
+        lfoExpanded: false,
+        pitchEnvExpanded: false,
         duckingEnabled: false,
         duckingGain: duckingGains[3],
         duckingAmount: 0.3,
@@ -243,7 +258,9 @@ export const Sequencer = () => {
           velocityMap: track.velocityMap || new Array(64).fill(1),
           pitchControlVisible: track.pitchControlVisible ?? false,
           velocityControlVisible: track.velocityControlVisible ?? false,
-          shuffle: track.shuffle ?? 0.0,
+          operatorsExpanded: track.operatorsExpanded ?? false,
+          lfoExpanded: track.lfoExpanded ?? false,
+          pitchEnvExpanded: track.pitchEnvExpanded ?? false,
           activeSynth: trackSynths[index],
           duckingGain: index > 0 ? duckingGains[index] : null,
         }));
@@ -365,13 +382,12 @@ export const Sequencer = () => {
 
         // Apply shuffle: every odd 16th note (1, 3, 5, 7, etc.) gets delayed
         // Shuffle value 0-1: 0 = no swing, 1 = max swing (triplet feel)
-        const maxShuffle = tracksRef.current.reduce((max, track) => Math.max(max, track.shuffle), 0);
-        if (step % 2 === 0 && maxShuffle > 0) {
+        if (step % 2 === 0 && shuffle > 0) {
           // Current step is even (0, 2, 4...), next will be odd - add swing delay
-          delay = baseDuration * (1 + maxShuffle * 0.5); // Up to 1.5x duration for full shuffle
-        } else if (step % 2 === 1 && maxShuffle > 0) {
+          delay = baseDuration * (1 + shuffle * 0.5); // Up to 1.5x duration for full shuffle
+        } else if (step % 2 === 1 && shuffle > 0) {
           // Current step is odd (1, 3, 5...), next will be even - subtract to compensate
-          delay = baseDuration * (1 - maxShuffle * 0.5); // Down to 0.5x duration
+          delay = baseDuration * (1 - shuffle * 0.5); // Down to 0.5x duration
         }
 
         // Schedule next step
@@ -401,7 +417,7 @@ export const Sequencer = () => {
       }
       currentStepRef.current = currentStepRef.current % Math.max(stepCount, 1);
     };
-  }, [isPlaying, bpm, stepCount]);
+  }, [isPlaying, bpm, stepCount, shuffle]);
 
   const toggleStep = (trackId: number, stepIndex: number) => {
     setTracks(prev =>
@@ -415,8 +431,14 @@ export const Sequencer = () => {
 
   const clearAll = () => {
     setTracks(prev =>
-      prev.map(track => ({ ...track, steps: new Array(64).fill(false) }))
+      prev.map(track => ({
+        ...track,
+        steps: new Array(64).fill(false),
+        pitchMap: new Array(64).fill(1),
+        velocityMap: new Array(64).fill(1),
+      }))
     );
+    setShuffle(0.0);
   };
 
   const updateOperator = (
@@ -512,14 +534,6 @@ export const Sequencer = () => {
     );
   };
 
-  const updateShuffle = (trackId: number, shuffle: number) => {
-    setTracks(prev =>
-      prev.map(track =>
-        track.id === trackId ? { ...track, shuffle } : track
-      )
-    );
-  };
-
   const toggleLFO = (trackId: number) => {
     setTracks(prev =>
       prev.map(track =>
@@ -548,6 +562,30 @@ export const Sequencer = () => {
     setTracks(prev =>
       prev.map(track =>
         track.id === trackId ? { ...track, velocityControlVisible: !track.velocityControlVisible } : track
+      )
+    );
+  };
+
+  const toggleOperators = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, operatorsExpanded: !track.operatorsExpanded } : track
+      )
+    );
+  };
+
+  const toggleLFOExpanded = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, lfoExpanded: !track.lfoExpanded } : track
+      )
+    );
+  };
+
+  const togglePitchEnvExpanded = (trackId: number) => {
+    setTracks(prev =>
+      prev.map(track =>
+        track.id === trackId ? { ...track, pitchEnvExpanded: !track.pitchEnvExpanded } : track
       )
     );
   };
@@ -631,6 +669,8 @@ export const Sequencer = () => {
             lfo: { frequency: 7.289716616269852, depth: 0.2644860006832155 },
             algorithm: 'parallel' as FMAlgorithm,
             pitchEnvelope: { attack: 0.03263920787813766, decay: 0.0633337102583343, depth: 2 },
+            pitchMap: new Array(64).fill(1),
+            velocityMap: new Array(64).fill(1),
             noteLength: 1.0,
             lfoEnabled: true,
             pitchEnabled: true,
@@ -650,6 +690,8 @@ export const Sequencer = () => {
             lfo: { frequency: 10, depth: 0.05 },
             algorithm: 'serial' as FMAlgorithm,
             pitchEnvelope: { attack: 0.01, decay: 0.03, depth: 0.3 },
+            pitchMap: new Array(64).fill(1),
+            velocityMap: new Array(64).fill(1),
             noteLength: 1.0,
             lfoEnabled: true,
             pitchEnabled: true,
@@ -669,6 +711,8 @@ export const Sequencer = () => {
             lfo: { frequency: 20, depth: 0.1 },
             algorithm: 'parallel' as FMAlgorithm,
             pitchEnvelope: { attack: 0.005, decay: 0.02, depth: 0.2 },
+            pitchMap: new Array(64).fill(1),
+            velocityMap: new Array(64).fill(1),
             noteLength: 0.5,
             lfoEnabled: true,
             pitchEnabled: false,
@@ -688,6 +732,8 @@ export const Sequencer = () => {
             lfo: { frequency: 5, depth: 0.03 },
             algorithm: 'hybrid1' as FMAlgorithm,
             pitchEnvelope: { attack: 0.02, decay: 0.1, depth: 0.4 },
+            pitchMap: new Array(64).fill(1),
+            velocityMap: new Array(64).fill(1),
             noteLength: 2.0,
             lfoEnabled: true,
             pitchEnabled: true,
@@ -695,6 +741,7 @@ export const Sequencer = () => {
         }
       })
     );
+    setShuffle(0.0);
     showToast('初期シーケンスと音色をロードしました！');
   };
 
@@ -765,7 +812,7 @@ export const Sequencer = () => {
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: '#2a2a2a', color: '#e0e0e0', padding: '20px', fontSize: '14px', minHeight: '100vh' }}>
-      <h1 style={{ textAlign: 'center', fontSize: '28px', margin: '0 0 24px 0', fontWeight: '300', letterSpacing: '2px' }}>FM SYNTH</h1>
+      <h1 style={{ textAlign: 'center', fontSize: '28px', margin: '0 0 24px 0', fontWeight: '300', letterSpacing: '2px' }}>FM DRUM MACHINE</h1>
 
       {/* Global Controls */}
       <div style={{ background: '#3a3a3a', padding: '16px', marginBottom: '20px', borderRadius: '4px' }}>
@@ -828,6 +875,22 @@ export const Sequencer = () => {
               <option value={32}>32</option>
               <option value={64}>64</option>
             </select>
+          </label>
+
+          <label style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>Shuffle</span>
+            <input
+              type="range"
+              value={shuffle}
+              onChange={e => setShuffle(Number(e.target.value))}
+              min={0}
+              max={1}
+              step={0.01}
+              style={{
+                width: '80px',
+              }}
+            />
+            <span style={{ fontSize: '13px', color: '#999', minWidth: '40px' }}>{(shuffle * 100).toFixed(0)}%</span>
           </label>
 
           <button
@@ -1122,81 +1185,138 @@ export const Sequencer = () => {
               />
               <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.noteLength.toFixed(1)}</div>
             </div>
+          </div>
 
-            <div>
-              <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={track.lfoEnabled}
-                  onChange={() => toggleLFO(track.id)}
-                  style={{ width: '16px', height: '16px' }}
-                />
-                LFO Freq
-              </label>
+          {/* LFO */}
+          <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginBottom: '12px' }}>
+            <button
+              onClick={() => toggleLFOExpanded(track.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#e0e0e0',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: track.lfoExpanded ? '12px' : '0',
+              }}
+            >
+              {track.lfoExpanded ? <FaChevronUp /> : <FaChevronDown />}
               <input
-                type="range"
-                min={0}
-                max={50}
-                step={0.1}
-                value={track.lfo.frequency}
-                onChange={e => updateLFO(track.id, 'frequency', Number(e.target.value))}
-                disabled={!track.lfoEnabled}
-                style={{ width: '100%', opacity: track.lfoEnabled ? 1 : 0.5 }}
+                type="checkbox"
+                checked={track.lfoEnabled}
+                onChange={() => toggleLFO(track.id)}
+                onClick={e => e.stopPropagation()}
+                style={{ width: '16px', height: '16px', marginLeft: '8px' }}
               />
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.lfo.frequency.toFixed(1)} Hz</div>
-            </div>
+              LFO
+            </button>
 
-            <div>
-              <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>LFO Depth</label>
-              <input
-                type="range"
-                min={0}
-                max={4}
-                step={0.01}
-                value={track.lfo.depth}
-                onChange={e => updateLFO(track.id, 'depth', Number(e.target.value))}
-                disabled={!track.lfoEnabled}
-                style={{ width: '100%', opacity: track.lfoEnabled ? 1 : 0.5 }}
-              />
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.lfo.depth.toFixed(2)}</div>
-            </div>
+            {track.lfoExpanded && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <LFOGraph
+                    frequency={track.lfo.frequency}
+                    depth={track.lfo.depth}
+                    width={280}
+                    height={80}
+                  />
+                </div>
 
-            <div>
-              <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={track.pitchEnabled}
-                  onChange={() => togglePitch(track.id)}
-                  style={{ width: '16px', height: '16px' }}
-                />
-                Pitch Env
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={track.pitchEnvelope.depth}
-                onChange={e => updatePitchEnvelope(track.id, 'depth', Number(e.target.value))}
-                disabled={!track.pitchEnabled}
-                style={{ width: '100%', opacity: track.pitchEnabled ? 1 : 0.5 }}
-              />
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.pitchEnvelope.depth.toFixed(2)}</div>
-            </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Frequency</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={50}
+                      step={0.1}
+                      value={track.lfo.frequency}
+                      onChange={e => updateLFO(track.id, 'frequency', Number(e.target.value))}
+                      disabled={!track.lfoEnabled}
+                      style={{ width: '100%', opacity: track.lfoEnabled ? 1 : 0.5 }}
+                    />
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.lfo.frequency.toFixed(1)} Hz</div>
+                  </div>
 
-            <div>
-              <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Shuffle</label>
+                  <div>
+                    <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Depth</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={4}
+                      step={0.01}
+                      value={track.lfo.depth}
+                      onChange={e => updateLFO(track.id, 'depth', Number(e.target.value))}
+                      disabled={!track.lfoEnabled}
+                      style={{ width: '100%', opacity: track.lfoEnabled ? 1 : 0.5 }}
+                    />
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.lfo.depth.toFixed(2)}</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Pitch Envelope */}
+          <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginBottom: '12px' }}>
+            <button
+              onClick={() => togglePitchEnvExpanded(track.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#e0e0e0',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: track.pitchEnvExpanded ? '12px' : '0',
+              }}
+            >
+              {track.pitchEnvExpanded ? <FaChevronUp /> : <FaChevronDown />}
               <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={track.shuffle}
-                onChange={e => updateShuffle(track.id, Number(e.target.value))}
-                style={{ width: '100%' }}
+                type="checkbox"
+                checked={track.pitchEnabled}
+                onChange={() => togglePitch(track.id)}
+                onClick={e => e.stopPropagation()}
+                style={{ width: '16px', height: '16px', marginLeft: '8px' }}
               />
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{(track.shuffle * 100).toFixed(0)}%</div>
-            </div>
+              Pitch Envelope
+            </button>
+
+            {track.pitchEnvExpanded && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <PitchEnvelopeGraph
+                    depth={track.pitchEnvelope.depth}
+                    width={280}
+                    height={80}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Depth</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    value={track.pitchEnvelope.depth}
+                    onChange={e => updatePitchEnvelope(track.id, 'depth', Number(e.target.value))}
+                    disabled={!track.pitchEnabled}
+                    style={{ width: '100%', opacity: track.pitchEnabled ? 1 : 0.5 }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{track.pitchEnvelope.depth.toFixed(2)}</div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Ducking - Only for tracks 2, 3, 4 */}
@@ -1269,68 +1389,71 @@ export const Sequencer = () => {
 
           {/* Operators */}
           <div style={{ background: '#3a3a3a', padding: '12px', borderRadius: '4px', marginTop: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '500' }}>Operators</div>
+            <button
+              onClick={() => toggleOperators(track.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#e0e0e0',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: track.operatorsExpanded ? '12px' : '0',
+              }}
+            >
+              {track.operatorsExpanded ? <FaChevronUp /> : <FaChevronDown />}
+              Operators
+            </button>
 
-              {/* Algorithm Selection with SVG Diagram */}
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  value={track.algorithm}
-                  onChange={e => updateAlgorithm(track.id, e.target.value as FMAlgorithm)}
-                  style={{
-                    background: '#4a4a4a',
-                    color: '#e0e0e0',
-                    border: '1px solid #5a5a5a',
-                    padding: '4px 6px',
-                    fontSize: '11px',
-                    borderRadius: '4px',
-                  }}
-                >
-                  <option value="serial">Serial</option>
-                  <option value="parallel">Parallel</option>
-                  <option value="hybrid1">Hybrid1</option>
-                  <option value="hybrid2">Hybrid2</option>
-                </select>
-
-                <FMAlgorithmDiagram
-                  algorithm={track.algorithm}
-                  hoveredOperator={
-                    hoveredOperator?.trackId === track.id && typeof hoveredOperator.operatorIndex === 'number'
-                      ? hoveredOperator.operatorIndex
-                      : null
-                  }
-                  onHover={opIndex => {
-                    if (opIndex === null) {
-                      setHoveredOperator(prev => (prev?.trackId === track.id ? null : prev));
-                    } else {
-                      setHoveredOperator({ trackId: track.id, operatorIndex: opIndex });
-                    }
-                  }}
-                />
+            {track.operatorsExpanded && (
+            <>
+              {/* Algorithm Selection - Toggle buttons with diagrams */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {(['serial', 'parallel', 'hybrid1', 'hybrid2'] as const).map((algo) => (
+                  <button
+                    key={algo}
+                    onClick={() => updateAlgorithm(track.id, algo)}
+                    style={{
+                      background: track.algorithm === algo ? '#ffffff' : '#4a4a4a',
+                      border: track.algorithm === algo ? '2px solid #ffffff' : '1px solid #5a5a5a',
+                      borderRadius: '4px',
+                      padding: '6px 8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <FMAlgorithmDiagram
+                      algorithm={algo}
+                      hoveredOperator={
+                        hoveredOperator?.trackId === track.id && typeof hoveredOperator.operatorIndex === 'number'
+                          ? hoveredOperator.operatorIndex
+                          : null
+                      }
+                      onHover={opIndex => {
+                        if (opIndex === null) {
+                          setHoveredOperator(prev => (prev?.trackId === track.id ? null : prev));
+                        } else {
+                          setHoveredOperator({ trackId: track.id, operatorIndex: opIndex });
+                        }
+                      }}
+                    />
+                    <span style={{ fontSize: '9px', color: track.algorithm === algo ? '#2a2a2a' : '#999', fontWeight: '500', textTransform: 'uppercase' }}>
+                      {algo === 'hybrid1' ? 'H1' : algo === 'hybrid2' ? 'H2' : algo.slice(0, 3)}
+                    </span>
+                  </button>
+                ))}
               </div>
-            </div>
 
-            {/* ADSR Envelope - All Operators */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#999', marginBottom: '8px', textAlign: 'center' }}>ADSR (All Operators)</div>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ADSRGraph
-                  attack={track.operators[0]?.attack ?? 0}
-                  decay={track.operators[0]?.decay ?? 0}
-                  sustain={track.operators[0]?.sustain ?? 0}
-                  release={track.operators[0]?.release ?? 0}
-                  width={400}
-                  height={140}
-                  onAttackChange={(value) => updateAllOperatorsADSR(track.id, 'attack', value)}
-                  onDecayChange={(value) => updateAllOperatorsADSR(track.id, 'decay', value)}
-                  onSustainChange={(value) => updateAllOperatorsADSR(track.id, 'sustain', value)}
-                  onReleaseChange={(value) => updateAllOperatorsADSR(track.id, 'release', value)}
-                />
-              </div>
-            </div>
-
-            {/* Individual Operators - 5 column layout */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+              {/* Operators - 5 column layout */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
               {/* Unified ADSR Operator */}
               <div
                 style={{
@@ -1361,14 +1484,14 @@ export const Sequencer = () => {
                   ALL
                 </div>
 
-                <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ marginBottom: '12px', width: '100%' }}>
                   <ADSRGraph
                     attack={track.operators[0]?.attack ?? 0}
                     decay={track.operators[0]?.decay ?? 0}
                     sustain={track.operators[0]?.sustain ?? 0}
                     release={track.operators[0]?.release ?? 0}
-                    width={200}
-                    height={100}
+                    width={280}
+                    height={120}
                     onAttackChange={(value) => updateAllOperatorsADSR(track.id, 'attack', value)}
                     onDecayChange={(value) => updateAllOperatorsADSR(track.id, 'decay', value)}
                     onSustainChange={(value) => updateAllOperatorsADSR(track.id, 'sustain', value)}
@@ -1413,14 +1536,14 @@ export const Sequencer = () => {
                     </div>
 
                   {/* ADSR Graph */}
-                  <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ marginBottom: '12px', width: '100%' }}>
                     <ADSRGraph
                       attack={op.attack}
                       decay={op.decay}
                       sustain={op.sustain}
                       release={op.release}
-                      width={200}
-                      height={100}
+                      width={280}
+                      height={120}
                       onAttackChange={(value) => updateOperator(track.id, opIndex, 'attack', value)}
                       onDecayChange={(value) => updateOperator(track.id, opIndex, 'decay', value)}
                       onSustainChange={(value) => updateOperator(track.id, opIndex, 'sustain', value)}
@@ -1461,7 +1584,9 @@ export const Sequencer = () => {
                 </div>
                 );
               })}
-            </div>
+              </div>
+            </>
+            )}
           </div>
         </div>
       ))}
