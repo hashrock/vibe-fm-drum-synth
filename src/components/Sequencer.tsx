@@ -7,6 +7,7 @@ import { RotaryKnob } from './RotaryKnob';
 import { FMAlgorithmDiagram } from './FMAlgorithmDiagram';
 import { LFOGraph } from './LFOGraph';
 import { PitchEnvelopeGraph } from './PitchEnvelopeGraph';
+import { serializeState, deserializeState } from '../utils/urlState';
 import {
   FaPlay,
   FaPause,
@@ -18,10 +19,12 @@ import {
   FaVolumeMute,
   FaVolumeUp,
   FaChevronDown,
-  FaChevronUp
+  FaChevronUp,
+  FaLink,
+  FaCheck
 } from 'react-icons/fa';
 
-interface TrackData {
+export interface TrackData {
   id: number;
   name: string;
   steps: boolean[];
@@ -57,6 +60,7 @@ export const Sequencer = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [hoveredOperator, setHoveredOperator] = useState<{ trackId: number; operatorIndex: number | 'all' | null } | null>(null);
   const [shuffle, setShuffle] = useState(0.0); // Global shuffle parameter
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -247,26 +251,52 @@ export const Sequencer = () => {
       },
     ];
 
-    // Load from localStorage or use initial tracks
+    // Try to load state from URL first, then localStorage, then use initial tracks
     try {
-      const savedData = localStorage.getItem('fmsynth-tracks');
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
-        const restoredTracks = parsed.map((track: TrackData, index: number) => ({
-          ...track,
-          // Add missing fields if they don't exist (for backward compatibility)
-          velocityMap: track.velocityMap || new Array(64).fill(1),
-          pitchControlVisible: track.pitchControlVisible ?? false,
-          velocityControlVisible: track.velocityControlVisible ?? false,
-          operatorsExpanded: track.operatorsExpanded ?? false,
-          lfoExpanded: track.lfoExpanded ?? false,
-          pitchEnvExpanded: track.pitchEnvExpanded ?? false,
-          activeSynth: trackSynths[index],
-          duckingGain: index > 0 ? duckingGains[index] : null,
-        }));
-        setTracks(restoredTracks);
+      const urlParams = new URLSearchParams(window.location.search);
+      const stateParam = urlParams.get('state');
+
+      if (stateParam) {
+        // Load from URL
+        const decoded = deserializeState(stateParam);
+        if (decoded) {
+          setBpm(decoded.bpm);
+          setStepCount(decoded.stepCount);
+          setShuffle(decoded.shuffle);
+
+          const restoredTracks = decoded.tracks.map((track, index) => ({
+            ...track,
+            name: initialTracks[index].name,
+            activeSynth: trackSynths[index],
+            duckingGain: index > 0 ? duckingGains[index] : null,
+          })) as TrackData[];
+
+          setTracks(restoredTracks);
+        } else {
+          console.error('Failed to decode URL state');
+          setTracks(initialTracks);
+        }
       } else {
-        setTracks(initialTracks);
+        // Load from localStorage
+        const savedData = localStorage.getItem('fmsynth-tracks');
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          const restoredTracks = parsed.map((track: TrackData, index: number) => ({
+            ...track,
+            // Add missing fields if they don't exist (for backward compatibility)
+            velocityMap: track.velocityMap || new Array(64).fill(1),
+            pitchControlVisible: track.pitchControlVisible ?? false,
+            velocityControlVisible: track.velocityControlVisible ?? false,
+            operatorsExpanded: track.operatorsExpanded ?? false,
+            lfoExpanded: track.lfoExpanded ?? false,
+            pitchEnvExpanded: track.pitchEnvExpanded ?? false,
+            activeSynth: trackSynths[index],
+            duckingGain: index > 0 ? duckingGains[index] : null,
+          }));
+          setTracks(restoredTracks);
+        } else {
+          setTracks(initialTracks);
+        }
       }
     } catch (e) {
       console.error('Failed to load saved tracks:', e);
@@ -439,6 +469,28 @@ export const Sequencer = () => {
       }))
     );
     setShuffle(0.0);
+  };
+
+  const shareURL = () => {
+    try {
+      const encoded = serializeState(tracks, bpm, stepCount, shuffle);
+      const url = new URL(window.location.href);
+      url.searchParams.set('state', encoded);
+
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        setUrlCopied(true);
+        setTimeout(() => setUrlCopied(false), 2000);
+        setToast('URL copied to clipboard!');
+        setTimeout(() => setToast(null), 2000);
+      }).catch(() => {
+        setToast('Failed to copy URL');
+        setTimeout(() => setToast(null), 2000);
+      });
+    } catch (error) {
+      console.error('Failed to generate share URL:', error);
+      setToast('Failed to generate URL');
+      setTimeout(() => setToast(null), 2000);
+    }
   };
 
   const updateOperator = (
@@ -929,6 +981,27 @@ export const Sequencer = () => {
             }}
           >
             <FaUndo /> RESET
+          </button>
+
+          <button
+            onClick={shareURL}
+            style={{
+              background: urlCopied ? '#4CAF50' : '#2196F3',
+              color: '#ffffff',
+              border: 'none',
+              padding: '10px 24px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'background 0.3s',
+            }}
+          >
+            {urlCopied ? <FaCheck /> : <FaLink />}
+            {urlCopied ? 'COPIED!' : 'SHARE URL'}
           </button>
         </div>
       </div>
