@@ -87,7 +87,7 @@ export const RectSlider = ({
           left: 0,
           width: '100%',
           height: `${normalizedValue * 100}%`,
-          background: disabled ? '#555' : '#90caf9',
+          background: disabled ? '#555' : '#ffffff',
           transition: isDragging ? 'none' : 'height 0.1s ease',
         }}
       />
